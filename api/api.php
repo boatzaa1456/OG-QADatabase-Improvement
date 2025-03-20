@@ -1,4 +1,7 @@
 <?php
+// เพิ่มเวลาในการประมวลผล PHP
+ini_set('max_execution_time', 300); // 5 นาที
+
 // ป้องกันการแสดง PHP errors ไปยัง output
 ini_set('display_errors', 0);
 error_reporting(E_ALL);

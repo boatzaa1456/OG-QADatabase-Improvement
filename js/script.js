@@ -835,20 +835,20 @@ function saveFormData() {
 
 // ฟังก์ชันสำหรับส่งข้อมูลไปยังเซิร์ฟเวอร์
 function sendDataToServer(data) {
-   // แสดงข้อความกำลังบันทึกข้อมูล
-   $('#qa-form').append('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
-   
-   // เพิ่ม console.log เพื่อดูข้อมูลที่ส่ง
-   console.log("ข้อมูลที่กำลังส่ง:", data);
-   
+    // แสดงข้อความกำลังบันทึกข้อมูล
+    $('#qa-form').append('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
+    
+    // เพิ่ม console.log เพื่อดูข้อมูลที่ส่ง
+    console.log("ข้อมูลที่กำลังส่ง:", data);
+    
     // ส่งข้อมูลไปยัง API ด้วย AJAX
     $.ajax({
         url: 'api/api.php?action=save_inspection',
         type: 'POST',
         contentType: 'application/json',
         data: JSON.stringify(data),
+        timeout: 30000, // เพิ่มค่า timeout เป็น 30 วินาที
         success: function(response) {
-            // แก้ไขในส่วนนี้
             try {
                 // ตรวจสอบว่า response เป็น object หรือ string
                 const result = typeof response === 'object' ? response : JSON.parse(response);
@@ -857,8 +857,8 @@ function sendDataToServer(data) {
                     // แสดงข้อความสำเร็จ
                     $('#save-status').removeClass('alert-info').addClass('alert-success')
                         .html(`บันทึกข้อมูลเรียบร้อย (ID: ${result.id})<br>
-                            <a href="view.html?id=${result.id}" class="btn btn-sm btn-primary mt-2">ดูข้อมูลที่บันทึก</a>
-                            <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="clearForm()">เริ่มบันทึกใหม่</button>`);
+                             <a href="view.html?id=${result.id}" class="btn btn-sm btn-primary mt-2">ดูข้อมูลที่บันทึก</a>
+                             <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="clearForm()">เริ่มบันทึกใหม่</button>`);
                 } else {
                     // แสดงข้อความผิดพลาด
                     $('#save-status').removeClass('alert-info').addClass('alert-danger')
@@ -872,10 +872,15 @@ function sendDataToServer(data) {
             }
         },
         error: function(xhr, status, error) {
-            // กรณีเกิดข้อผิดพลาดในการส่งข้อมูล
-            $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                .html(`เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}`);
+            // เพิ่มการตรวจสอบกรณีหมดเวลา
+            if (status === 'timeout') {
+                $('#save-status').removeClass('alert-info').addClass('alert-danger')
+                    .html('การเชื่อมต่อหมดเวลา กรุณาลองอีกครั้ง');
+            } else {
+                $('#save-status').removeClass('alert-info').addClass('alert-danger')
+                    .html(`เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}`);
+            }
             console.error('AJAX Error:', status, error, xhr.responseText);
         }
     });
-}
+ }

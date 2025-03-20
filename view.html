@@ -84,6 +84,7 @@
             $.ajax({
                 url: `api/api.php?action=get_inspection&id=${id}`,
                 type: 'GET',
+                timeout: 30000, // เพิ่มค่า timeout เป็น 30 วินาที
                 success: function(response) {
                     try {
                         // ตรวจสอบว่า response เป็น object หรือ string
@@ -100,7 +101,11 @@
                     }
                 },
                 error: function(xhr, status, error) {
-                    $('#inspection-content').html(`<div class="alert alert-danger">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}</div>`);
+                    if (status === 'timeout') {
+                        $('#inspection-content').html('<div class="alert alert-danger">การเชื่อมต่อหมดเวลา กรุณารีเฟรชหน้านี้</div>');
+                    } else {
+                        $('#inspection-content').html(`<div class="alert alert-danger">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}</div>`);
+                    }
                     console.error('AJAX Error:', status, error, xhr.responseText);
                 }
             });
