@@ -1,13 +1,13 @@
+// ตรวจสอบ jQuery ก่อน
+if (typeof jQuery === 'undefined') {
+    throw new Error('jQuery is not loaded. Please include jQuery library.');
+}
+
 // เมื่อเอกสารโหลดเสร็จ
 $(document).ready(function() {
     // เรียกฟังก์ชันเพื่อแสดงแบบฟอร์ม
     displayQAForm();
 });
-
-// Ensure the jQuery library is loaded
-if (typeof jQuery === 'undefined') {
-    throw new Error('jQuery is not loaded. Please include jQuery library.');
-}
 
 // ฟังก์ชันแสดงแบบฟอร์ม QA
 function displayQAForm() {
@@ -486,12 +486,13 @@ function createQAFormHTML() {
                                 <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="1" data-defect="1019" value="0"></td>
                                 <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="2" data-defect="1019" value="0"></td>
                                 <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="3" data-defect="1019" value="0"></td>
-                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="4" data-defect="1019" value="0"></td>
-                            </tr>
-                            <tr>
-                                <td>1052</td>
-                                <td>Scratch</td>
-                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="1" data-defect="1052" value="0"></td>
+                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="3" data-defect="1019" value="0"></td>
+                               <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="4" data-defect="1019" value="0"></td>
+                           </tr>
+                           <tr>
+                               <td>1052</td>
+                               <td>Scratch</td>
+                               <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="1" data-defect="1052" value="0"></td>
                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="2" data-defect="1052" value="0"></td>
                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="3" data-defect="1052" value="0"></td>
                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="4" data-defect="1052" value="0"></td>
@@ -696,6 +697,9 @@ function addFormEventListeners() {
    $('#clear-form').on('click', function() {
        clearForm();
    });
+   
+   // คำนวณผลรวมเริ่มต้น
+   calculateDefectTotals();
 }
 
 // ฟังก์ชันคำนวณผลรวมข้อบกพร่อง
@@ -721,147 +725,153 @@ function clearForm() {
 
 // ฟังก์ชันบันทึกข้อมูลจากฟอร์ม
 function saveFormData() {
-    // เก็บข้อมูลจากฟอร์ม
-    const formData = {
-        // ข้อมูลทั่วไป
-        docPT: $('#doc-pt').val(),
-        productionDate: $('#production-date').val(),
-        shift: $('input[name="shift"]:checked').val(),
-        itemNumber: $('#item-number').val(),
-        gaugeMark: $('#gauge-mark').val(),
-        productionType: $('input[name="production-type"]:checked').val(),
-        rework: $('#rework').is(':checked'),
-        destroy: $('#destroy').is(':checked'),
-        useJig: $('#use-jig').is(':checked'),
-        noJig: $('#no-jig').is(':checked'),
-        machineNo: $('#machine-no').val(),
-        totalProduct: $('#total-product').val(),
-        samplingDate: $('#sampling-date').val(),
-        workOrder: $('#work-order').val(),
-        operation: $('#operation').val(),
-        
-        // ข้อมูลล็อต (จะเก็บเป็นอาร์เรย์)
-        lots: [],
-        
-        // ข้อมูลข้อบกพร่อง (จะเก็บเป็นอาร์เรย์)
-        defects: [],
-        
-        // ข้อมูลการวัดความเครียด (จะเก็บเป็นอาร์เรย์)
-        strainMeasurements: [],
-        
-        // ข้อมูลการอนุมัติ
-        inspector: $('#inspector').val(),
-        supervisor: $('#supervisor').val(),
-        remarks: $('#remarks').val()
-    };
-    
-    // เก็บข้อมูลล็อต
-    for (let i = 1; i <= 4; i++) {
-        const lotData = {
-            lotNumber: $(`#lot-number-${i}`).val(),
-            piecesPerLot: $(`#pieces-per-lot-${i}`).val(),
-            description: $(`#description-${i}`).val(),
-            palletNo: $(`#pallet-no-${i}`).val(),
-            strainStd: $(`#strain-std-${i}`).val(),
-            firstSampleSize: $(`#first-sample-size-${i}`).val(),
-            firstSampleAcRe: $(`#first-sample-ac-re-${i}`).val(),
-            secondSampleSize: $(`#second-sample-size-${i}`).val(),
-            secondSampleAcRe: $(`#second-sample-ac-re-${i}`).val(),
-            result: $(`input[name="result-${i}"]:checked`).val(),
-            qp: $(`#qp-${i}`).val(),
-            strainResult: $(`input[name="strain-result-${i}"]:checked`).val()
-        };
-        
-        // เพิ่มข้อมูลล็อตเข้าอาร์เรย์เฉพาะเมื่อมีการกรอกข้อมูล
-        if (lotData.lotNumber) {
-            formData.lots.push(lotData);
-        }
-    }
-    
-    // เก็บข้อมูลข้อบกพร่อง
-    $('.defect-input').each(function() {
-        const lot = $(this).data('lot');
-        const defect = $(this).data('defect');
-        const count = parseInt($(this).val()) || 0;
-        
-        if (count > 0) {
-            formData.defects.push({
-                lot: lot,
-                defectCode: defect,
-                count: count
-            });
-        }
-    });
-    
-    // เก็บข้อมูลการวัดความเครียด
-    $('.strain-input').each(function() {
-        const lot = $(this).data('lot');
-        const position = $(this).data('position');
-        const value = parseFloat($(this).val());
-        
-        if (value) {
-            formData.strainMeasurements.push({
-                lot: lot,
-                position: position,
-                value: value
-            });
-        }
-    });
-    
-    // ตรวจสอบว่ามีการกรอกข้อมูลพื้นฐานครบถ้วนหรือไม่
-    if (!formData.docPT || !formData.productionDate || !formData.shift || !formData.itemNumber || !formData.machineNo || !formData.totalProduct || !formData.samplingDate || !formData.workOrder) {
-        alert('กรุณากรอกข้อมูลพื้นฐานให้ครบถ้วน');
-        return;
-    }
-    
-    // ตรวจสอบว่ามีการกรอกข้อมูลล็อตอย่างน้อย 1 ล็อตหรือไม่
-    if (formData.lots.length === 0) {
-        alert('กรุณากรอกข้อมูลล็อตอย่างน้อย 1 ล็อต');
-        return;
-    }
-    
-    // ส่งข้อมูลไปยังเซิร์ฟเวอร์
-    sendDataToServer(formData);
+   // เก็บข้อมูลจากฟอร์ม
+   const formData = {
+       // ข้อมูลทั่วไป
+       docPT: $('#doc-pt').val(),
+       productionDate: $('#production-date').val(),
+       shift: $('input[name="shift"]:checked').val(),
+       itemNumber: $('#item-number').val(),
+       gaugeMark: $('#gauge-mark').val(),
+       productionType: $('input[name="production-type"]:checked').val(),
+       rework: $('#rework').is(':checked'),
+       destroy: $('#destroy').is(':checked'),
+       useJig: $('#use-jig').is(':checked'),
+       noJig: $('#no-jig').is(':checked'),
+       machineNo: $('#machine-no').val(),
+       totalProduct: $('#total-product').val(),
+       samplingDate: $('#sampling-date').val(),
+       workOrder: $('#work-order').val(),
+       operation: $('#operation').val(),
+       
+       // ข้อมูลล็อต (จะเก็บเป็นอาร์เรย์)
+       lots: [],
+       
+       // ข้อมูลข้อบกพร่อง (จะเก็บเป็นอาร์เรย์)
+       defects: [],
+       
+       // ข้อมูลการวัดความเครียด (จะเก็บเป็นอาร์เรย์)
+       strainMeasurements: [],
+       
+       // ข้อมูลการอนุมัติ
+       inspector: $('#inspector').val(),
+       supervisor: $('#supervisor').val(),
+       remarks: $('#remarks').val()
+   };
+   
+   // เก็บข้อมูลล็อต
+   for (let i = 1; i <= 4; i++) {
+       const lotData = {
+           lotNumber: $(`#lot-number-${i}`).val(),
+           piecesPerLot: $(`#pieces-per-lot-${i}`).val(),
+           description: $(`#description-${i}`).val(),
+           palletNo: $(`#pallet-no-${i}`).val(),
+           strainStd: $(`#strain-std-${i}`).val(),
+           firstSampleSize: $(`#first-sample-size-${i}`).val(),
+           firstSampleAcRe: $(`#first-sample-ac-re-${i}`).val(),
+           secondSampleSize: $(`#second-sample-size-${i}`).val(),
+           secondSampleAcRe: $(`#second-sample-ac-re-${i}`).val(),
+           result: $(`input[name="result-${i}"]:checked`).val(),
+           qp: $(`#qp-${i}`).val(),
+           strainResult: $(`input[name="strain-result-${i}"]:checked`).val()
+       };
+       
+       // เพิ่มข้อมูลล็อตเข้าอาร์เรย์เฉพาะเมื่อมีการกรอกข้อมูล
+       if (lotData.lotNumber) {
+           formData.lots.push(lotData);
+       }
+   }
+   
+   // เก็บข้อมูลข้อบกพร่อง
+   $('.defect-input').each(function() {
+       const lot = $(this).data('lot');
+       const defect = $(this).data('defect');
+       const count = parseInt($(this).val()) || 0;
+       
+       if (count > 0) {
+           formData.defects.push({
+               lot: lot,
+               defectCode: defect,
+               count: count
+           });
+       }
+   });
+   
+   // เก็บข้อมูลการวัดความเครียด
+   $('.strain-input').each(function() {
+       const lot = $(this).data('lot');
+       const position = $(this).data('position');
+       const value = parseFloat($(this).val());
+       
+       if (value) {
+           formData.strainMeasurements.push({
+               lot: lot,
+               position: position,
+               value: value
+           });
+       }
+   });
+   
+   // ตรวจสอบว่ามีการกรอกข้อมูลพื้นฐานครบถ้วนหรือไม่
+   if (!formData.docPT || !formData.productionDate || !formData.shift || !formData.itemNumber || !formData.machineNo || !formData.totalProduct || !formData.samplingDate || !formData.workOrder) {
+       alert('กรุณากรอกข้อมูลพื้นฐานให้ครบถ้วน');
+       return;
+   }
+   
+   // ตรวจสอบว่ามีการเลือกผู้ตรวจสอบและผู้ตรวจทาน
+   if (!formData.inspector || !formData.supervisor) {
+       alert('กรุณาเลือกผู้ตรวจสอบและผู้ตรวจทาน');
+       return;
+   }
+   
+   // ตรวจสอบว่ามีการกรอกข้อมูลล็อตอย่างน้อย 1 ล็อตหรือไม่
+   if (formData.lots.length === 0) {
+       alert('กรุณากรอกข้อมูลล็อตอย่างน้อย 1 ล็อต');
+       return;
+   }
+   
+   // ส่งข้อมูลไปยังเซิร์ฟเวอร์
+   sendDataToServer(formData);
 }
 
 // ฟังก์ชันสำหรับส่งข้อมูลไปยังเซิร์ฟเวอร์
 function sendDataToServer(data) {
-    // แสดงข้อความกำลังบันทึกข้อมูล
-    $('#qa-form').append('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
-    
-    // ส่งข้อมูลไปยัง API ด้วย AJAX
-    $.ajax({
-        url: 'api/api.php?action=save_inspection',
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(data),
-        success: function(response) {
-            try {
-                const result = JSON.parse(response);
-                
-                if (result.status === 'success') {
-                    // แสดงข้อความสำเร็จ
-                    $('#save-status').removeClass('alert-info').addClass('alert-success')
-                        .html(`บันทึกข้อมูลเรียบร้อย (ID: ${result.id})<br>
-                               <a href="view.html?id=${result.id}" class="btn btn-sm btn-primary mt-2">ดูข้อมูลที่บันทึก</a>
-                               <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="clearForm()">เริ่มบันทึกใหม่</button>`);
-                } else {
-                    // แสดงข้อความผิดพลาด
-                    $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                        .html(`เกิดข้อผิดพลาด: ${result.message}`);
-                }
-            } catch (e) {
-                // กรณีเกิดข้อผิดพลาดในการแปลง JSON
-                $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                    .html('เกิดข้อผิดพลาดในการรับข้อมูลจากเซิร์ฟเวอร์');
-                console.error('Error parsing JSON response:', e);
-            }
-        },
-        error: function(xhr, status, error) {
-            // กรณีเกิดข้อผิดพลาดในการส่งข้อมูล
-            $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                .html(`เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}`);
-            console.error('AJAX Error:', status, error);
-        }
-    });
+   // แสดงข้อความกำลังบันทึกข้อมูล
+   $('#qa-form').append('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
+   
+   // ส่งข้อมูลไปยัง API ด้วย AJAX
+   $.ajax({
+       url: 'api/api.php?action=save_inspection',
+       type: 'POST',
+       contentType: 'application/json',
+       data: JSON.stringify(data),
+       success: function(response) {
+           try {
+               const result = JSON.parse(response);
+               
+               if (result.status === 'success') {
+                   // แสดงข้อความสำเร็จ
+                   $('#save-status').removeClass('alert-info').addClass('alert-success')
+                       .html(`บันทึกข้อมูลเรียบร้อย (ID: ${result.id})<br>
+                              <a href="view.html?id=${result.id}" class="btn btn-sm btn-primary mt-2">ดูข้อมูลที่บันทึก</a>
+                              <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="clearForm()">เริ่มบันทึกใหม่</button>`);
+               } else {
+                   // แสดงข้อความผิดพลาด
+                   $('#save-status').removeClass('alert-info').addClass('alert-danger')
+                       .html(`เกิดข้อผิดพลาด: ${result.message}`);
+               }
+           } catch (e) {
+               // กรณีเกิดข้อผิดพลาดในการแปลง JSON
+               $('#save-status').removeClass('alert-info').addClass('alert-danger')
+                   .html('เกิดข้อผิดพลาดในการรับข้อมูลจากเซิร์ฟเวอร์');
+               console.error('Error parsing JSON response:', e);
+           }
+       },
+       error: function(xhr, status, error) {
+           // กรณีเกิดข้อผิดพลาดในการส่งข้อมูล
+           $('#save-status').removeClass('alert-info').addClass('alert-danger')
+               .html(`เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}`);
+           console.error('AJAX Error:', status, error);
+       }
+   });
 }

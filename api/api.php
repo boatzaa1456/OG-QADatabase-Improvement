@@ -55,6 +55,9 @@ function saveInspection($data) {
         // เริ่ม transaction
         $conn->begin_transaction();
         
+        // เพิ่มบรรทัดนี้ตรงนี้ ก่อนใช้งาน $lotIds
+        $lotIds = [];
+        
         // 1. บันทึกข้อมูลหลักของการตรวจสอบ
         $stmt = $conn->prepare("INSERT INTO inspections (doc_pt, production_date, shift, item_number, gauge_mark, 
                                 production_type, is_rework, is_destroy, use_jig, no_jig, machine_no, 
