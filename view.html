@@ -86,7 +86,8 @@
                 type: 'GET',
                 success: function(response) {
                     try {
-                        const result = JSON.parse(response);
+                        // ตรวจสอบว่า response เป็น object หรือ string
+                        const result = typeof response === 'object' ? response : JSON.parse(response);
                         
                         if (result.status === 'success') {
                             displayInspectionDetails(result.data);
@@ -95,12 +96,12 @@
                         }
                     } catch (e) {
                         $('#inspection-content').html('<div class="alert alert-danger">เกิดข้อผิดพลาดในการรับข้อมูล</div>');
-                        console.error('Error parsing JSON response:', e);
+                        console.error('Error parsing response:', e, response);
                     }
                 },
                 error: function(xhr, status, error) {
                     $('#inspection-content').html(`<div class="alert alert-danger">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}</div>`);
-                    console.error('AJAX Error:', status, error);
+                    console.error('AJAX Error:', status, error, xhr.responseText);
                 }
             });
         }
