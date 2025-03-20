@@ -835,42 +835,51 @@ function saveFormData() {
 
 // ฟังก์ชันสำหรับส่งข้อมูลไปยังเซิร์ฟเวอร์
 function sendDataToServer(data) {
-   // แสดงข้อความกำลังบันทึกข้อมูล
-   $('#qa-form').append('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
-   
-   // ส่งข้อมูลไปยัง API ด้วย AJAX
-   $.ajax({
-       url: 'api/api.php?action=save_inspection',
-       type: 'POST',
-       contentType: 'application/json',
-       data: JSON.stringify(data),
-       success: function(response) {
-           try {
-               const result = JSON.parse(response);
-               
-               if (result.status === 'success') {
-                   // แสดงข้อความสำเร็จ
-                   $('#save-status').removeClass('alert-info').addClass('alert-success')
-                       .html(`บันทึกข้อมูลเรียบร้อย (ID: ${result.id})<br>
-                              <a href="view.html?id=${result.id}" class="btn btn-sm btn-primary mt-2">ดูข้อมูลที่บันทึก</a>
-                              <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="clearForm()">เริ่มบันทึกใหม่</button>`);
-               } else {
-                   // แสดงข้อความผิดพลาด
-                   $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                       .html(`เกิดข้อผิดพลาด: ${result.message}`);
-               }
-           } catch (e) {
-               // กรณีเกิดข้อผิดพลาดในการแปลง JSON
-               $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                   .html('เกิดข้อผิดพลาดในการรับข้อมูลจากเซิร์ฟเวอร์');
-               console.error('Error parsing JSON response:', e);
-           }
-       },
-       error: function(xhr, status, error) {
-           // กรณีเกิดข้อผิดพลาดในการส่งข้อมูล
-           $('#save-status').removeClass('alert-info').addClass('alert-danger')
-               .html(`เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}`);
-           console.error('AJAX Error:', status, error);
-       }
-   });
-}
+    // แสดงข้อความกำลังบันทึกข้อมูล
+    $('#qa-form').append('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
+    
+    // เพิ่ม console.log เพื่อดูข้อมูลที่ส่ง
+    console.log("ข้อมูลที่กำลังส่ง:", data);
+    
+    // ส่งข้อมูลไปยัง API ด้วย AJAX
+    $.ajax({
+        url: 'api/api.php?action=save_inspection',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        success: function(response) {
+            // เพิ่ม console.log เพื่อดูการตอบกลับดิบๆ
+            console.log("การตอบกลับดิบ:", response);
+            
+            try {
+                const result = JSON.parse(response);
+                
+                if (result.status === 'success') {
+                    // แสดงข้อความสำเร็จ
+                    $('#save-status').removeClass('alert-info').addClass('alert-success')
+                        .html(`บันทึกข้อมูลเรียบร้อย (ID: ${result.id})<br>
+                               <a href="view.html?id=${result.id}" class="btn btn-sm btn-primary mt-2">ดูข้อมูลที่บันทึก</a>
+                               <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="clearForm()">เริ่มบันทึกใหม่</button>`);
+                } else {
+                    // แสดงข้อความผิดพลาด
+                    $('#save-status').removeClass('alert-info').addClass('alert-danger')
+                        .html(`เกิดข้อผิดพลาด: ${result.message}`);
+                }
+            } catch (e) {
+                // กรณีเกิดข้อผิดพลาดในการแปลง JSON
+                $('#save-status').removeClass('alert-info').addClass('alert-danger')
+                    .html('เกิดข้อผิดพลาดในการรับข้อมูลจากเซิร์ฟเวอร์: ' + e.message + '<br>การตอบกลับ: ' + response.substring(0, 200));
+                console.error('Error parsing JSON response:', e);
+            }
+        },
+        error: function(xhr, status, error) {
+            // เพิ่มการแสดงข้อมูลการตอบกลับมากขึ้น
+            console.log("xhr response:", xhr.responseText);
+            
+            // กรณีเกิดข้อผิดพลาดในการส่งข้อมูล
+            $('#save-status').removeClass('alert-info').addClass('alert-danger')
+                .html(`เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}<br>สถานะ: ${status}<br>ข้อความ: ${xhr.responseText.substring(0, 200)}`);
+            console.error('AJAX Error:', status, error);
+        }
+    });
+ }
