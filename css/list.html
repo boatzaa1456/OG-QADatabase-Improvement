@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>รายการการตรวจสอบคุณภาพ - Ocean Glass QA System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- เพิ่ม Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <header class="mb-4">
+            <h1 class="text-center">Ocean Glass - QA QUALITY DATA</h1>
+            <nav class="navbar navbar-expand-lg navbar-light bg-light">
+                <div class="container-fluid">
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav">
+                            <li class="nav-item">
+                                <a class="nav-link" href="index.html">หน้าหลัก</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link active" href="list.html">รายการตรวจสอบ</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </header>
+        
+        <main>
+            <div class="border p-4 rounded shadow-sm">
+                <h2 class="mb-3">รายการการตรวจสอบคุณภาพทั้งหมด</h2>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <a href="index.html" class="btn btn-primary">
+                            <i class="bi bi-plus-circle"></i> บันทึกการตรวจสอบใหม่
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <input type="text" id="search-input" class="form-control" placeholder="ค้นหา...">
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Doc: PT</th>
+                                <th>วันที่ผลิต</th>
+                                <th>กะ</th>
+                                <th>Item Number</th>
+                                <th>Machine No.</th>
+                                <th>Total Product</th>
+                                <th>วันที่บันทึก</th>
+                                <th>การจัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inspection-list">
+                            <!-- ข้อมูลจะถูกเพิ่มจาก JavaScript -->
+                            <tr>
+                                <td colspan="9" class="text-center">กำลังโหลดข้อมูล...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="mt-4 text-center">
+            <p>© 2025 Ocean Glass QA System</p>
+        </footer>
+    </div>
+    
+    <!-- เพิ่ม Bootstrap JS และ jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // โหลดข้อมูลการตรวจสอบทั้งหมด
+            loadInspections();
+            
+            // Event listener สำหรับช่องค้นหา
+            $('#search-input').on('keyup', function() {
+                const searchText = $(this).val().toLowerCase();
+                filterInspections(searchText);
+            });
+        });
+        
+        // ฟังก์ชันโหลดข้อมูลการตรวจสอบ
+        function loadInspections() {
+            $.ajax({
+                url: 'api/api.php?action=get_inspections',
+                type: 'GET',
+                success: function(response) {
+                    try {
+                        const result = JSON.parse(response);
+                        
+                        if (result.status === 'success') {
+                            displayInspections(result.data);
+                        } else {
+                            $('#inspection-list').html(`<tr><td colspan="9" class="text-center">เกิดข้อผิดพลาด: ${result.message}</td></tr>`);
+                        }
+                    } catch (e) {
+                        $('#inspection-list').html('<tr><td colspan="9" class="text-center">เกิดข้อผิดพลาดในการรับข้อมูล</td></tr>');
+                        console.error('Error parsing JSON response:', e);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#inspection-list').html(`<tr><td colspan="9" class="text-center">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}</td></tr>`);
+                    console.error('AJAX Error:', status, error);
+                }
+            });
+        }
+        
+        // ฟังก์ชันแสดงข้อมูลการตรวจสอบในตาราง
+        function displayInspections(inspections) {
+            if (inspections.length === 0) {
+                $('#inspection-list').html('<tr><td colspan="9" class="text-center">ไม่พบข้อมูลการตรวจสอบ</td></tr>');
+                return;
+            }
+            
+            let html = '';
+            
+            inspections.forEach(function(inspection) {
+                const productionDate = new Date(inspection.production_date).toLocaleDateString('th-TH');
+                const createdAt = new Date(inspection.created_at).toLocaleDateString('th-TH') + ' ' + 
+                                 new Date(inspection.created_at).toLocaleTimeString('th-TH');
+                
+                html += `
+                    <tr>
+                        <td>${inspection.id}</td>
+                        <td>${inspection.doc_pt}</td>
+                        <td>${productionDate}</td>
+                        <td>${inspection.shift}</td>
+                        <td>${inspection.item_number}</td>
+                        <td>${inspection.machine_no}</td>
+                        <td>${inspection.total_product}</td>
+                        <td>${createdAt}</td>
+                        <td>
+                            <a href="view.html?id=${inspection.id}" class="btn btn-sm btn-info">ดู</a>
+                            <a href="print.html?id=${inspection.id}" class="btn btn-sm btn-secondary">พิมพ์</a>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            $('#inspection-list').html(html);
+        }
+        
+        // ฟังก์ชันกรองข้อมูลการตรวจสอบตามคำค้นหา
+        function filterInspections(searchText) {
+            $('#inspection-list tr').each(function() {
+                const rowText = $(this).text().toLowerCase();
+                
+                if (rowText.indexOf(searchText) > -1) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+        }
+    </script>
+ </body>
+ </html>
