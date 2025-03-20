@@ -73,7 +73,9 @@
             // Event listener สำหรับปุ่มพิมพ์
             $('#print-btn').on('click', function(e) {
                 e.preventDefault();
-                window.print();
+                const urlParams = new URLSearchParams(window.location.search);
+                const inspectionId = urlParams.get('id');
+                window.location.href = 'print.html?id=' + inspectionId;
             });
         });
         
