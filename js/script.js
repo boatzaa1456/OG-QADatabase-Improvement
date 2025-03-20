@@ -486,8 +486,7 @@ function createQAFormHTML() {
                                 <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="1" data-defect="1019" value="0"></td>
                                 <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="2" data-defect="1019" value="0"></td>
                                 <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="3" data-defect="1019" value="0"></td>
-                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="3" data-defect="1019" value="0"></td>
-                               <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="4" data-defect="1019" value="0"></td>
+                                <td><input type="number" min="0" class="form-control form-control-sm defect-input" data-lot="4" data-defect="1019" value="0"></td>
                            </tr>
                            <tr>
                                <td>1052</td>
