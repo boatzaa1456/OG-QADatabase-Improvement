@@ -1,0 +1,54 @@
+/* ตั้งค่าสีหลักของ Ocean Glass */
+:root {
+    --primary-color: #007bff;
+    --secondary-color: #6c757d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --background-color: #f8f9fa;
+}
+
+body {
+    background-color: var(--background-color);
+    font-family: 'Sarabun', Arial, sans-serif;
+}
+
+header h1 {
+    color: var(--primary-color);
+}
+
+/* สไตล์สำหรับแบบฟอร์ม */
+.form-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: white;
+    border-radius: 5px;
+}
+
+.form-section h3 {
+    color: var(--primary-color);
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+/* ตารางข้อมูลข้อบกพร่อง */
+.defect-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.defect-table th, .defect-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+
+.defect-table th {
+    background-color: #f2f2f2;
+}
+
+/* สไตล์สำหรับปุ่ม */
+.action-button {
+    margin-top: 10px;
+}
