@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>พิมพ์รายงานการตรวจสอบ - Ocean Glass QA System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- เพิ่ม Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* สไตล์สำหรับการพิมพ์ */
+        @media print {
+            header nav, .no-print, footer, .btn {
+                display: none !important;
+            }
+            body {
+                font-size: 12pt;
+            }
+            .container {
+                width: 100%;
+                max-width: 100%;
+            }
+            h1 {
+                font-size: 18pt;
+            }
+            h2 {
+                font-size: 16pt;
+            }
+            h3, h4 {
+                font-size: 14pt;
+            }
+            table {
+                page-break-inside: auto;
+            }
+            tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+            .company-header {
+                text-align: center;
+                margin-bottom: 20px;
+            }
+            .footer-print {
+                display: block !important;
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+                font-size: 10pt;
+                text-align: center;
+                border-top: 1px solid #ddd;
+                padding-top: 5px;
+            }
+        }
+        
+        .footer-print {
+            display: none;
+        }
+        
+        /* สไตล์ทั่วไป */
+        .signature-box {
+            border-top: 1px solid #000;
+            margin-top: 30px;
+            padding-top: 5px;
+            text-align: center;
+            width: 200px;
+            display: inline-block;
+            margin-right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <header class="mb-4">
+            <h1 class="text-center">Ocean Glass - QA QUALITY DATA</h1>
+            <nav class="navbar navbar-expand-lg navbar-light bg-light no-print">
+                <div class="container-fluid">
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="navbarNav">
+                        <ul class="navbar-nav">
+                            <li class="nav-item">
+                                <a class="nav-link" href="index.html">หน้าหลัก</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="list.html">รายการตรวจสอบ</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+        </header>
+        
+        <main>
+            <div class="border p-4 rounded shadow-sm">
+                <div class="company-header">
+                    <img src="img/logo.png" alt="Ocean Glass Logo" height="60" class="mb-2">
+                    <h2 id="report-title">รายงานการตรวจสอบคุณภาพ</h2>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+                    <div>
+                        <a href="list.html" class="btn btn-secondary">กลับไปยังรายการ</a>
+                    </div>
+                    <div>
+                        <button class="btn btn-primary" id="print-btn" onclick="window.print();">พิมพ์รายงาน</button>
+                    </div>
+                </div>
+                
+                <div id="inspection-content">
+                    <p class="text-center">กำลังโหลดข้อมูล...</p>
+                </div>
+                
+                <div class="mt-5">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <div class="signature-box">
+                                <p id="inspector-name"></p>
+                                <p>ผู้ตรวจสอบ</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="signature-box">
+                                <p id="supervisor-name"></p>
+                                <p>ผู้ตรวจทาน</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="signature-box">
+                                <p>&nbsp;</p>
+                                <p>ผู้อนุมัติ</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="mt-4 text-center no-print">
+            <p>© 2025 Ocean Glass QA System</p>
+        </footer>
+        
+        <div class="footer-print">
+            เอกสารนี้ออกจากระบบ Ocean Glass QA System - วันที่พิมพ์: <span id="print-date"></span>
+        </div>
+    </div>
+    
+    <!-- เพิ่ม Bootstrap JS และ jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // รับค่า id จาก URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const inspectionId = urlParams.get('id');
+            
+            // ตั้งค่าวันที่พิมพ์
+            const now = new Date();
+            const formattedDate = now.toLocaleDateString('th-TH') + ' ' + now.toLocaleTimeString('th-TH');
+            $('#print-date').text(formattedDate);
+            
+            if (!inspectionId) {
+                $('#inspection-content').html('<div class="alert alert-danger">ไม่พบรหัสการตรวจสอบ</div>');
+                return;
+            }
+            
+            // โหลดข้อมูลการตรวจสอบตาม ID
+            loadInspectionDetails(inspectionId);
+        });
+        
+        // ฟังก์ชันโหลดข้อมูลรายละเอียดการตรวจสอบ
+        function loadInspectionDetails(id) {
+            $.ajax({
+                url: `api/api.php?action=get_inspection&id=${id}`,
+                type: 'GET',
+                success: function(response) {
+                    try {
+                        const result = JSON.parse(response);
+                        
+                        if (result.status === 'success') {
+                            displayInspectionDetails(result.data);
+                        } else {
+                            $('#inspection-content').html(`<div class="alert alert-danger">เกิดข้อผิดพลาด: ${result.message}</div>`);
+                        }
+                    } catch (e) {
+                        $('#inspection-content').html('<div class="alert alert-danger">เกิดข้อผิดพลาดในการรับข้อมูล</div>');
+                        console.error('Error parsing JSON response:', e);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#inspection-content').html(`<div class="alert alert-danger">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}</div>`);
+                    console.error('AJAX Error:', status, error);
+                }
+            });
+        }
+        
+        // ฟังก์ชันแสดงรายละเอียดการตรวจสอบ
+        function displayInspectionDetails(inspection) {
+            // ตั้งค่าชื่อรายงาน
+            $('#report-title').text(`รายงานการตรวจสอบคุณภาพ #${inspection.id}`);
+            
+            // ตั้งค่าชื่อผู้ตรวจสอบและผู้ตรวจทาน
+            $('#inspector-name').text(inspection.inspector);
+            $('#supervisor-name').text(inspection.supervisor);
+            
+            // แปลงวันที่เป็นรูปแบบที่อ่านง่าย
+            const productionDate = new Date(inspection.production_date).toLocaleDateString('th-TH');
+            const samplingDate = new Date(inspection.sampling_date).toLocaleDateString('th-TH');
+            
+            // แปลงค่า boolean เป็นข้อความ
+            const rework = inspection.is_rework == 1 ? 'ใช่' : 'ไม่ใช่';
+            const destroy = inspection.is_destroy == 1 ? 'ใช่' : 'ไม่ใช่';
+            const useJig = inspection.use_jig == 1 ? 'ใช่' : 'ไม่ใช่';
+            const noJig = inspection.no_jig == 1 ? 'ใช่' : 'ไม่ใช่';
+            
+            // สร้าง HTML สำหรับรายละเอียดการตรวจสอบ
+            let html = `
+                <div class="row">
+                    <div class="col-md-12 mb-4">
+                        <h4>ข้อมูลทั่วไป</h4>
+                        <table class="table table-bordered">
+                            <tr>
+                                <th width="200">Doc: PT</th>
+                                <td>${inspection.doc_pt}</td>
+                                <th width="200">Production Date</th>
+                                <td>${productionDate}</td>
+                            </tr>
+                            <tr>
+                                <th>Shift</th>
+                                <td>${inspection.shift}</td>
+                                <th>Item Number</th>
+                                <td>${inspection.item_number}</td>
+                            </tr>
+                            <tr>
+                                <th>Gauge Mark</th>
+                                <td>${inspection.gauge_mark || '-'}</td>
+                                <th>Production Type</th>
+                                <td>${inspection.production_type}</td>
+                            </tr>
+                            <tr>
+                                <th>Rework</th>
+                                <td>${rework}</td>
+                                <th>Destroy</th>
+                                <td>${destroy}</td>
+                            </tr>
+                            <tr>
+                                <th>Use JIG</th>
+                                <td>${useJig}</td>
+                                <th>No JIG</th>
+                                <td>${noJig}</td>
+                            </tr>
+                            <tr>
+                                <th>Machine No.</th>
+                                <td>${inspection.machine_no}</td>
+                                <th>Total Product</th>
+                                <td>${inspection.total_product}</td>
+                            </tr>
+                            <tr>
+                                <th>Sampling Date</th>
+                                <td>${samplingDate}</td>
+                                <th>Work Order</th>
+                                <td>${inspection.work_order}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            // แสดงข้อมูลล็อต (ถ้ามี)
+            if (inspection.lots && inspection.lots.length > 0) {
+                html += `
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <h4>ข้อมูลล็อตและการสุ่มตัวอย่าง</h4>
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>LOT</th>
+                                        <th>จำนวนต่อล็อต</th>
+                                        <th>Description</th>
+                                        <th>Pallet No.</th>
+                                        <th>1st Sample</th>
+                                        <th>2nd Sample</th>
+                                        <th>Result</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+                
+                inspection.lots.forEach(function(lot) {
+                    html += `
+                        <tr>
+                            <td>${lot.lot_number}</td>
+                            <td>${lot.pieces_per_lot}</td>
+                            <td>${lot.description || '-'}</td>
+                            <td>${lot.pallet_no || '-'}</td>
+                            <td>${lot.first_sample_size || '-'} / ${lot.first_sample_ac_re || '-'}</td>
+                            <td>${lot.second_sample_size || '-'} / ${lot.second_sample_ac_re || '-'}</td>
+                            <td><strong>${lot.result || '-'}</strong></td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+                
+                // แสดงข้อมูลข้อบกพร่อง (ถ้ามี)
+                let defectsExist = false;
+                inspection.lots.forEach(function(lot) {
+                    if (lot.defects && lot.defects.length > 0) defectsExist = true;
+                });
+                
+                if (defectsExist) {
+                    html += `
+                        <div class="row">
+                            <div class="col-md-12 mb-4">
+                                <h4>ข้อบกพร่องที่พบ</h4>
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>ล็อต</th>
+                                            <th>รหัสข้อบกพร่อง</th>
+                                            <th>จำนวน</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    
+                    inspection.lots.forEach(function(lot) {
+                        if (lot.defects && lot.defects.length > 0) {
+                            lot.defects.forEach(function(defect) {
+                                html += `
+                                    <tr>
+                                        <td>${lot.lot_number}</td>
+                                        <td>${defect.defect_code}</td>
+                                        <td>${defect.defect_count}</td>
+                                    </tr>
+                                `;
+                            });
+                        }
+                    });
+                    
+                    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // แสดงข้อมูลการวัดความเครียด (ถ้ามี)
+                let strainExist = false;
+                inspection.lots.forEach(function(lot) {
+                    if (lot.strainMeasurements && lot.strainMeasurements.length > 0) strainExist = true;
+                });
+                
+                if (strainExist) {
+                    html += `
+                        <div class="row">
+                            <div class="col-md-12 mb-4">
+                                <h4>ผลการวัดความเครียด (Strain)</h4>
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>ล็อต</th>
+                                            <th>ตำแหน่ง</th>
+                                            <th>ค่า</th>
+                                            <th>ผลลัพธ์</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    
+                    inspection.lots.forEach(function(lot) {
+                        if (lot.strainMeasurements && lot.strainMeasurements.length > 0) {
+                            let rowspan = lot.strainMeasurements.length;
+                            let firstRow = true;
+                            
+                            lot.strainMeasurements.forEach(function(strain, index) {
+                                html += '<tr>';
+                                
+                                if (firstRow) {
+                                    html += `<td rowspan="${rowspan}">${lot.lot_number}</td>`;
+                                    firstRow = false;
+                                }
+                                
+                                html += `
+                                    <td>${strain.position}</td>
+                                    <td>${strain.value}</td>
+                                `;
+                                
+                                if (index === 0) {
+                                    html += `<td rowspan="${rowspan}">${lot.strain_result || '-'}</td>`;
+                                }
+                                
+                                html += '</tr>';
+                            });
+                        }
+                    });
+                    
+                    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // แสดงหมายเหตุ (ถ้ามี)
+            if (inspection.remarks) {
+                html += `
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <h4>หมายเหตุ</h4>
+                            <div class="p-3 border rounded">
+                                ${inspection.remarks}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // แสดงผล HTML ในหน้าเว็บ
+            $('#inspection-content').html(html);
+        }
+    </script>
+</body>
+</html>
