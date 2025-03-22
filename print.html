@@ -50,6 +50,9 @@
                 border-top: 1px solid #ddd;
                 padding-top: 5px;
             }
+            .page-break {
+                page-break-before: always;
+            }
         }
         
         .footer-print {
@@ -214,9 +217,23 @@
             const productionDate = new Date(inspection.production_date).toLocaleDateString('th-TH');
             const samplingDate = new Date(inspection.sampling_date).toLocaleDateString('th-TH');
             
+            // แปลงค่า shift เป็นข้อความที่อ่านง่าย
+            let shiftText;
+            switch(inspection.shift) {
+                case 'M':
+                    shiftText = 'M (เช้า)';
+                    break;
+                case 'A':
+                    shiftText = 'A (บ่าย)';
+                    break;
+                case 'N':
+                    shiftText = 'N (ดึก)';
+                    break;
+                default:
+                    shiftText = inspection.shift;
+            }
+            
             // แปลงค่า boolean เป็นข้อความ
-            const rework = inspection.is_rework == 1 ? 'ใช่' : 'ไม่ใช่';
-            const destroy = inspection.is_destroy == 1 ? 'ใช่' : 'ไม่ใช่';
             const useJig = inspection.use_jig == 1 ? 'ใช่' : 'ไม่ใช่';
             const noJig = inspection.no_jig == 1 ? 'ใช่' : 'ไม่ใช่';
             
@@ -234,7 +251,7 @@
                             </tr>
                             <tr>
                                 <th>Shift</th>
-                                <td>${inspection.shift}</td>
+                                <td>${shiftText}</td>
                                 <th>Item Number</th>
                                 <td>${inspection.item_number}</td>
                             </tr>
@@ -242,13 +259,7 @@
                                 <th>Gauge Mark</th>
                                 <td>${inspection.gauge_mark || '-'}</td>
                                 <th>Production Type</th>
-                                <td>${inspection.production_type}</td>
-                            </tr>
-                            <tr>
-                                <th>Rework</th>
-                                <td>${rework}</td>
-                                <th>Destroy</th>
-                                <td>${destroy}</td>
+                                <td>Production ${inspection.production_type}</td>
                             </tr>
                             <tr>
                                 <th>Use JIG</th>
@@ -268,57 +279,86 @@
                                 <th>Work Order</th>
                                 <td>${inspection.work_order}</td>
                             </tr>
+                            <tr>
+                                <th>Operation</th>
+                                <td colspan="3">${inspection.operation || '-'}</td>
+                            </tr>
                         </table>
                     </div>
                 </div>
             `;
             
-            // แสดงข้อมูลล็อต (ถ้ามี)
+            // แสดงข้อมูลล็อต (ถ้ามี) ในรูปแบบตาราง
             if (inspection.lots && inspection.lots.length > 0) {
                 html += `
                     <div class="row">
                         <div class="col-md-12 mb-4">
                             <h4>ข้อมูลล็อตและการสุ่มตัวอย่าง</h4>
                             <table class="table table-bordered">
-                                <thead>
+                                <thead class="table-light">
                                     <tr>
-                                        <th>LOT</th>
-                                        <th>จำนวนต่อล็อต</th>
-                                        <th>Description</th>
-                                        <th>Pallet No.</th>
-                                        <th>1st Sample</th>
-                                        <th>2nd Sample</th>
-                                        <th>Result</th>
+                                        <th>Field</th>
+                                        ${inspection.lots.map(lot => `<th>${lot.lot_number}</th>`).join('')}
                                     </tr>
                                 </thead>
                                 <tbody>
-                `;
-                
-                inspection.lots.forEach(function(lot) {
-                    html += `
-                        <tr>
-                            <td>${lot.lot_number}</td>
-                            <td>${lot.pieces_per_lot}</td>
-                            <td>${lot.description || '-'}</td>
-                            <td>${lot.pallet_no || '-'}</td>
-                            <td>${lot.first_sample_size || '-'} / ${lot.first_sample_ac_re || '-'}</td>
-                            <td>${lot.second_sample_size || '-'} / ${lot.second_sample_ac_re || '-'}</td>
-                            <td><strong>${lot.result || '-'}</strong></td>
-                        </tr>
-                    `;
-                });
-                
-                html += `
+                                    <tr>
+                                        <th>จำนวนต่อล็อต</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.pieces_per_lot || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>DESCRIPTION</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.description || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>Pallet No.</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.pallet_no || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>Strain Std.</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.strain_std || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>1st Sample Size</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.first_sample_size || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>1st Sample Ac. Re.</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.first_sample_ac_re || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>2nd Sample Size</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.second_sample_size || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>2nd Sample Ac. Re.</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.second_sample_ac_re || '-'}</td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>Result</th>
+                                        ${inspection.lots.map(lot => `<td><strong>${lot.result || '-'}</strong></td>`).join('')}
+                                    </tr>
+                                    <tr>
+                                        <th>QP.</th>
+                                        ${inspection.lots.map(lot => `<td>${lot.qp || '-'}</td>`).join('')}
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 `;
                 
-                // แสดงข้อมูลข้อบกพร่อง (ถ้ามี)
+                // สร้างรายการข้อบกพร่อง (ถ้ามี) โดยจัดกลุ่มตามล็อต
                 let defectsExist = false;
-                inspection.lots.forEach(function(lot) {
-                    if (lot.defects && lot.defects.length > 0) defectsExist = true;
+                const defectsByLot = {};
+                
+                // จัดกลุ่มข้อบกพร่องตามล็อต
+                inspection.lots.forEach(lot => {
+                    if (lot.defects && lot.defects.length > 0) {
+                        defectsExist = true;
+                        const lotNumber = lot.lot_number;
+                        defectsByLot[lotNumber] = lot.defects;
+                    }
                 });
                 
                 if (defectsExist) {
@@ -331,24 +371,29 @@
                                         <tr>
                                             <th>ล็อต</th>
                                             <th>รหัสข้อบกพร่อง</th>
+                                            <th>ชื่อข้อบกพร่อง</th>
                                             <th>จำนวน</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                     `;
                     
-                    inspection.lots.forEach(function(lot) {
-                        if (lot.defects && lot.defects.length > 0) {
-                            lot.defects.forEach(function(defect) {
-                                html += `
-                                    <tr>
-                                        <td>${lot.lot_number}</td>
-                                        <td>${defect.defect_code}</td>
-                                        <td>${defect.defect_count}</td>
-                                    </tr>
-                                `;
-                            });
-                        }
+                    // รวมข้อมูลข้อบกพร่องทั้งหมด
+                    Object.keys(defectsByLot).forEach(lotNumber => {
+                        const defects = defectsByLot[lotNumber];
+                        defects.forEach(defect => {
+                            // หาชื่อข้อบกพร่องจากรหัส (ถ้ามี)
+                            let defectName = defect.defect_code;
+                            
+                            html += `
+                                <tr>
+                                    <td>${lotNumber}</td>
+                                    <td>${defect.defect_code}</td>
+                                    <td>${defectName}</td>
+                                    <td>${defect.defect_count}</td>
+                                </tr>
+                            `;
+                        });
                     });
                     
                     html += `
@@ -361,55 +406,46 @@
                 
                 // แสดงข้อมูลการวัดความเครียด (ถ้ามี)
                 let strainExist = false;
-                inspection.lots.forEach(function(lot) {
+                inspection.lots.forEach(lot => {
                     if (lot.strainMeasurements && lot.strainMeasurements.length > 0) strainExist = true;
                 });
                 
                 if (strainExist) {
                     html += `
-                        <div class="row">
+                        <div class="row page-break">
                             <div class="col-md-12 mb-4">
-                                <h4>ผลการวัดความเครียด (Strain)</h4>
+                                <h4>ผลการวัดความเครียด (Strain Y-line)</h4>
                                 <table class="table table-bordered">
                                     <thead>
                                         <tr>
-                                            <th>ล็อต</th>
                                             <th>ตำแหน่ง</th>
-                                            <th>ค่า</th>
-                                            <th>ผลลัพธ์</th>
+                                            ${inspection.lots.map(lot => `<th>${lot.lot_number}</th>`).join('')}
                                         </tr>
                                     </thead>
                                     <tbody>
                     `;
                     
-                    inspection.lots.forEach(function(lot) {
-                        if (lot.strainMeasurements && lot.strainMeasurements.length > 0) {
-                            let rowspan = lot.strainMeasurements.length;
-                            let firstRow = true;
+                    // สร้างช่องสำหรับค่าความเครียดแต่ละตำแหน่ง (1-5)
+                    for (let position = 1; position <= 5; position++) {
+                        html += `<tr><td>${position}</td>`;
+                        
+                        // เพิ่มค่าสำหรับแต่ละล็อต
+                        inspection.lots.forEach(lot => {
+                            const measurement = lot.strainMeasurements ? 
+                                lot.strainMeasurements.find(m => m.position == position) : null;
                             
-                            lot.strainMeasurements.forEach(function(strain, index) {
-                                html += '<tr>';
-                                
-                                if (firstRow) {
-                                    html += `<td rowspan="${rowspan}">${lot.lot_number}</td>`;
-                                    firstRow = false;
-                                }
-                                
-                                html += `
-                                    <td>${strain.position}</td>
-                                    <td>${strain.value}</td>
-                                `;
-                                
-                                if (index === 0) {
-                                    html += `<td rowspan="${rowspan}">${lot.strain_result || '-'}</td>`;
-                                }
-                                
-                                html += '</tr>';
-                            });
-                        }
-                    });
+                            html += `<td>${measurement ? measurement.value : '-'}</td>`;
+                        });
+                        
+                        html += `</tr>`;
+                    }
                     
+                    // เพิ่มผลลัพธ์การตรวจสอบ
                     html += `
+                                        <tr class="table-secondary">
+                                            <th>ผลการตรวจสอบ</th>
+                                            ${inspection.lots.map(lot => `<td>${lot.strain_result || '-'}</td>`).join('')}
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
