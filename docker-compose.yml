@@ -3,7 +3,9 @@ version: '3.8'
 services:
   # Web Server and PHP Application
   web:
-    build: .
+    build: 
+      context: .
+      dockerfile: docker/Dockerfile.web
     container_name: oceanqa-web
     ports:
       - "80:80"
@@ -12,13 +14,16 @@ services:
       - ./docker/apache/000-default.conf:/etc/apache2/sites-available/000-default.conf
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/app.ini
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       - DB_HOST=db
-      - DB_USER=qauser
-      - DB_PASS=qapassword
-      - DB_NAME=ocean_glass_qa
+      - DB_USER=${DB_USER:-qauser}
+      - DB_PASS=${DB_PASS:-qapassword}
+      - DB_NAME=${DB_NAME:-ocean_glass_qa}
+      - APP_ENV=${APP_ENV:-development}
     restart: unless-stopped
+    user: "1000:1000"  # Run as non-root user
 
   # MySQL Database
   db:
@@ -30,14 +35,19 @@ services:
       - mysql_data:/var/lib/mysql
       - ./api/database.sql:/docker-entrypoint-initdb.d/database.sql
     environment:
-      - MYSQL_ROOT_PASSWORD=rootpassword
-      - MYSQL_DATABASE=ocean_glass_qa
-      - MYSQL_USER=qauser
-      - MYSQL_PASSWORD=qapassword
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-rootpassword}
+      - MYSQL_DATABASE=${DB_NAME:-ocean_glass_qa}
+      - MYSQL_USER=${DB_USER:-qauser}
+      - MYSQL_PASSWORD=${DB_PASS:-qapassword}
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$${MYSQL_USER}", "-p$${MYSQL_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  # phpMyAdmin (optional)
+  # phpMyAdmin (optional - only in development)
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: oceanqa-phpmyadmin
@@ -46,10 +56,13 @@ services:
     environment:
       - PMA_HOST=db
       - PMA_PORT=3306
-      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-rootpassword}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
+    profiles:
+      - dev
 
 volumes:
   mysql_data:
