@@ -7,9 +7,92 @@
     <link rel="stylesheet" href="css/style.css">
     <!-- เพิ่ม Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- เพิ่ม Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- เพิ่ม DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.2.2/css/buttons.bootstrap5.min.css">
+    <style>
+        .filter-card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 30px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .status-accept {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-reject {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .data-card {
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            height: 100%;
+            background-color: white;
+        }
+        .data-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .data-card-body {
+            padding: 20px;
+        }
+        .data-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 0;
+        }
+        .data-label {
+            color: #6c757d;
+            font-size: 14px;
+            margin-bottom: 0;
+        }
+        .data-icon {
+            font-size: 36px;
+            color: #007bff;
+            opacity: 0.2;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+        }
+        .loading-overlay {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            display: none;
+        }
+    </style>
 </head>
 <body>
-    <div class="container mt-4">
+    <!-- โหลดดิ้ง -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">กำลังโหลด...</span>
+        </div>
+    </div>
+
+    <div class="container-fluid mt-4 mb-5">
         <header class="mb-4">
             <h1 class="text-center">Ocean Glass - QA QUALITY DATA</h1>
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -31,75 +114,146 @@
             </nav>
         </header>
         
+        <!-- แดชบอร์ดสรุปข้อมูล -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="data-card">
+                    <div class="data-card-body">
+                        <h5 class="data-value" id="total-inspections">0</h5>
+                        <p class="data-label">การตรวจสอบทั้งหมด</p>
+                        <i class="fas fa-clipboard-check data-icon"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="data-card">
+                    <div class="data-card-body">
+                        <h5 class="data-value" id="accept-inspections">0</h5>
+                        <p class="data-label">ผ่านการตรวจสอบ</p>
+                        <i class="fas fa-check-circle data-icon"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="data-card">
+                    <div class="data-card-body">
+                        <h5 class="data-value" id="reject-inspections">0</h5>
+                        <p class="data-label">ไม่ผ่านการตรวจสอบ</p>
+                        <i class="fas fa-times-circle data-icon"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="data-card">
+                    <div class="data-card-body">
+                        <h5 class="data-value" id="today-inspections">0</h5>
+                        <p class="data-label">การตรวจสอบวันนี้</p>
+                        <i class="fas fa-calendar-day data-icon"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <main>
-            <div class="border p-4 rounded shadow-sm">
-                <h2 class="mb-3">รายการการตรวจสอบคุณภาพทั้งหมด</h2>
-                
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <a href="index.html" class="btn btn-primary">
-                            <i class="bi bi-plus-circle"></i> บันทึกการตรวจสอบใหม่
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0"><i class="fas fa-list-alt me-2"></i>รายการการตรวจสอบคุณภาพทั้งหมด</h4>
+                        <a href="index.html" class="btn btn-light">
+                            <i class="fas fa-plus-circle"></i> เพิ่มการตรวจสอบใหม่
                         </a>
                     </div>
-                    <div class="col-md-3">
-                        <select id="shift-filter" class="form-select">
-                            <option value="">ทุกกะ</option>
-                            <option value="M">M (เช้า)</option>
-                            <option value="A">A (บ่าย)</option>
-                            <option value="N">N (ดึก)</option>
-                        </select>
+                </div>
+                <div class="card-body">
+                    <div class="filter-card p-3 mb-4">
+                        <div class="row align-items-end">
+                            <div class="col-md-2 mb-2">
+                                <label for="date-range-start" class="form-label">วันที่เริ่มต้น</label>
+                                <input type="date" id="date-range-start" class="form-control">
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <label for="date-range-end" class="form-label">วันที่สิ้นสุด</label>
+                                <input type="date" id="date-range-end" class="form-control">
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <label for="shift-filter" class="form-label">กะ</label>
+                                <select id="shift-filter" class="form-select">
+                                    <option value="">ทุกกะ</option>
+                                    <option value="M">M (เช้า)</option>
+                                    <option value="A">A (บ่าย)</option>
+                                    <option value="N">N (ดึก)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <label for="machine-filter" class="form-label">เครื่องจักร</label>
+                                <select id="machine-filter" class="form-select">
+                                    <option value="">ทั้งหมด</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <label for="result-filter" class="form-label">ผลการตรวจสอบ</label>
+                                <select id="result-filter" class="form-select">
+                                    <option value="">ทั้งหมด</option>
+                                    <option value="Accept">ผ่าน (Accept)</option>
+                                    <option value="Reject">ไม่ผ่าน (Reject)</option>
+                                    <option value="Pending">รอผล (Pending)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2 mb-2">
+                                <label for="filter-button" class="form-label">&nbsp;</label>
+                                <button id="filter-button" class="btn btn-primary w-100">
+                                    <i class="fas fa-filter"></i> กรอง
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-3">
-                        <input type="date" id="date-filter" class="form-control" placeholder="กรองตามวันที่">
-                    </div>
-                    <div class="col-md-3">
-                        <input type="text" id="search-input" class="form-control" placeholder="ค้นหา...">
+                    
+                    <div class="table-responsive">
+                        <table id="inspection-table" class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Doc PT</th>
+                                    <th>วันที่ผลิต</th>
+                                    <th>กะ</th>
+                                    <th>Item No.</th>
+                                    <th>Machine</th>
+                                    <th>Total</th>
+                                    <th>ผลตรวจสอบ</th>
+                                    <th>ข้อบกพร่อง</th>
+                                    <th>วันที่บันทึก</th>
+                                    <th>การจัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- ข้อมูลจะถูกเพิ่มจาก JavaScript -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                
-                <div class="table-responsive">
-                    <table class="table table-bordered table-hover">
-                        <thead class="table-light">
-                            <tr>
-                                <th>ID</th>
-                                <th>Doc: PT</th>
-                                <th>วันที่ผลิต</th>
-                                <th>กะ</th>
-                                <th>Item Number</th>
-                                <th>Machine No.</th>
-                                <th>Total Product</th>
-                                <th>วันที่บันทึก</th>
-                                <th>การจัดการ</th>
-                            </tr>
-                        </thead>
-                        <tbody id="inspection-list">
-                            <!-- ข้อมูลจะถูกเพิ่มจาก JavaScript -->
-                            <tr>
-                                <td colspan="9" class="text-center">กำลังโหลดข้อมูล...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="d-flex justify-content-between mt-3">
-                    <div>
-                        <select id="page-size" class="form-select form-select-sm" style="width: auto;">
-                            <option value="10">10 รายการ</option>
-                            <option value="25">25 รายการ</option>
-                            <option value="50">50 รายการ</option>
-                            <option value="100">100 รายการ</option>
-                        </select>
+            </div>
+            
+            <!-- Modal สำหรับแสดงข้อบกพร่อง -->
+            <div class="modal fade" id="defectModal" tabindex="-1" aria-labelledby="defectModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="defectModalLabel">รายละเอียดข้อบกพร่อง</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" id="defect-modal-content">
+                            <!-- เนื้อหาจะถูกเพิ่มด้วย JavaScript -->
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+                        </div>
                     </div>
-                    <nav aria-label="Page navigation">
-                        <ul class="pagination" id="pagination">
-                            <!-- Pagination will be generated by JavaScript -->
-                        </ul>
-                    </nav>
                 </div>
             </div>
         </main>
         
         <footer class="mt-4 text-center">
-            <p>© 2025 Ocean Glass QA System</p>
+            <p>© 2025 Ocean Glass QA System | Version 2.0</p>
         </footer>
     </div>
     
@@ -107,38 +261,55 @@
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     
+    <!-- เพิ่ม DataTables JS -->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.bootstrap5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.print.min.js"></script>
+    
     <script>
+        // กำหนดตัวแปรสำหรับเก็บข้อมูลทั้งหมด
+        let allInspections = [];
+        let dataTable;
+        
         $(document).ready(function() {
-            // ตัวแปรสำหรับการแบ่งหน้า
-            let allInspections = [];
-            let currentPage = 1;
-            let pageSize = 10;
+            // ตั้งค่าวันที่เริ่มต้นและสิ้นสุดเป็นเดือนปัจจุบัน
+            setDefaultDateRange();
             
             // โหลดข้อมูลการตรวจสอบทั้งหมด
             loadInspections();
             
-            // Event listeners สำหรับตัวกรอง
-            $('#search-input').on('keyup', function() {
-                filterInspections();
-            });
-            
-            $('#shift-filter').on('change', function() {
-                filterInspections();
-            });
-            
-            $('#date-filter').on('change', function() {
-                filterInspections();
-            });
-            
-            $('#page-size').on('change', function() {
-                pageSize = parseInt($(this).val());
-                currentPage = 1;
-                displayInspections(allInspections);
+            // กำหนด Event listener สำหรับปุ่มกรอง
+            $('#filter-button').on('click', function() {
+                applyFilters();
             });
         });
         
-        // ฟังก์ชันโหลดข้อมูลการตรวจสอบ
+        // ฟังก์ชันตั้งค่าวันที่เริ่มต้นและสิ้นสุดเป็นเดือนปัจจุบัน
+        function setDefaultDateRange() {
+            const now = new Date();
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            
+            $('#date-range-start').val(formatDate(firstDay));
+            $('#date-range-end').val(formatDate(now)); // ใช้วันปัจจุบันเป็นวันสิ้นสุด
+        }
+        
+        // ฟังก์ชันแปลงวันที่เป็นรูปแบบ YYYY-MM-DD
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        // ฟังก์ชันโหลดข้อมูลการตรวจสอบทั้งหมด
         function loadInspections() {
+            $('#loading-overlay').show();
+            
             $.ajax({
                 url: 'api/api.php?action=get_inspections',
                 type: 'GET',
@@ -149,161 +320,411 @@
                         
                         if (result.status === 'success') {
                             allInspections = result.data;
-                            displayInspections(allInspections);
+                            
+                            // ดึงค่า Machine ที่มีทั้งหมดเพื่อใส่ในตัวเลือก
+                            populateMachineFilter(allInspections);
+                            
+                            // แสดงข้อมูลและตั้งค่าตาราง DataTable
+                            initializeDataTable(allInspections);
+                            
+                            // อัพเดทสรุปข้อมูล
+                            updateSummaryData(allInspections);
                         } else {
-                            $('#inspection-list').html(`<tr><td colspan="9" class="text-center">เกิดข้อผิดพลาด: ${result.message}</td></tr>`);
+                            showAlert('danger', `เกิดข้อผิดพลาด: ${result.message}`);
                         }
                     } catch (e) {
-                        $('#inspection-list').html('<tr><td colspan="9" class="text-center">เกิดข้อผิดพลาดในการรับข้อมูล</td></tr>');
+                        showAlert('danger', 'เกิดข้อผิดพลาดในการรับข้อมูล');
                         console.error('Error parsing response:', e, response);
+                    } finally {
+                        $('#loading-overlay').hide();
                     }
                 },
                 error: function(xhr, status, error) {
-                    $('#inspection-list').html(`<tr><td colspan="9" class="text-center">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}</td></tr>`);
+                    $('#loading-overlay').hide();
+                    showAlert('danger', `เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}`);
                     console.error('AJAX Error:', status, error, xhr.responseText);
                 }
             });
         }
         
-        // ฟังก์ชันกรองข้อมูลการตรวจสอบ
-        function filterInspections() {
-            const searchText = $('#search-input').val().toLowerCase();
-            const shiftFilter = $('#shift-filter').val();
-            const dateFilter = $('#date-filter').val();
+        // ฟังก์ชันเพิ่มตัวเลือกเครื่องจักรในตัวกรอง
+        function populateMachineFilter(inspections) {
+            const machines = new Set();
             
-            let filtered = allInspections;
+            // เก็บรวบรวมเครื่องจักรทั้งหมดที่มีในข้อมูล
+            inspections.forEach(inspection => {
+                if (inspection.machine_no) {
+                    machines.add(inspection.machine_no);
+                }
+            });
             
-            // กรองตามคำค้นหา
-            if (searchText) {
-                filtered = filtered.filter(inspection => {
-                    return inspection.doc_pt.toLowerCase().includes(searchText) ||
-                           inspection.item_number.toLowerCase().includes(searchText) ||
-                           inspection.machine_no.toLowerCase().includes(searchText) ||
-                           inspection.work_order?.toLowerCase().includes(searchText);
+            // เรียงลำดับตามตัวอักษร
+            const sortedMachines = Array.from(machines).sort();
+            
+            // เพิ่มตัวเลือกในแต่ละเครื่องจักร
+            sortedMachines.forEach(machine => {
+                $('#machine-filter').append(`<option value="${machine}">${machine}</option>`);
+            });
+        }
+        
+        // ฟังก์ชันตั้งค่าตาราง DataTable
+        function initializeDataTable(data) {
+            if (dataTable) {
+                dataTable.destroy();
+            }
+            
+            // เตรียมข้อมูลสำหรับตาราง
+            const tableData = prepareTableData(data);
+            
+            // ตั้งค่า DataTable
+            dataTable = $('#inspection-table').DataTable({
+                data: tableData,
+                columns: [
+                    { data: 'id' },
+                    { data: 'doc_pt' },
+                    { data: 'production_date' },
+                    { data: 'shift' },
+                    { data: 'item_number' },
+                    { data: 'machine_no' },
+                    { data: 'total_product' },
+                    { data: 'result' },
+                    { data: 'defects' },
+                    { data: 'created_at' },
+                    { data: 'actions' }
+                ],
+                order: [[0, 'desc']], // เรียงตาม ID จากมากไปน้อย
+                dom: 'Bfrtip',
+                buttons: [
+                    {
+                        extend: 'excel',
+                        text: '<i class="fas fa-file-excel"></i> Excel',
+                        className: 'btn btn-success',
+                        exportOptions: {
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 9] // ไม่รวมคอลัมน์ actions
+                        },
+                        title: 'รายการการตรวจสอบคุณภาพ Ocean Glass'
+                    },
+                    {
+                        extend: 'csv',
+                        text: '<i class="fas fa-file-csv"></i> CSV',
+                        className: 'btn btn-info',
+                        exportOptions: {
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 9] // ไม่รวมคอลัมน์ actions
+                        }
+                    },
+                    {
+                        extend: 'print',
+                        text: '<i class="fas fa-print"></i> พิมพ์',
+                        className: 'btn btn-secondary',
+                        exportOptions: {
+                            columns: [0, 1, 2, 3, 4, 5, 6, 7, 9] // ไม่รวมคอลัมน์ actions
+                        }
+                    }
+                ],
+                language: {
+                    "lengthMenu": "แสดง _MENU_ รายการต่อหน้า",
+                    "zeroRecords": "ไม่พบข้อมูล",
+                    "info": "แสดงหน้า _PAGE_ จาก _PAGES_",
+                    "infoEmpty": "ไม่มีข้อมูลที่แสดง",
+                    "infoFiltered": "(กรองจาก _MAX_ รายการทั้งหมด)",
+                    "search": "ค้นหา:",
+                    "paginate": {
+                        "first": "หน้าแรก",
+                        "last": "หน้าสุดท้าย",
+                        "next": "ถัดไป",
+                        "previous": "ก่อนหน้า"
+                    }
+                }
+            });
+            
+            // เพิ่ม Event Listener สำหรับการแสดงรายละเอียดข้อบกพร่อง
+            $('#inspection-table tbody').on('click', '.defect-details-btn', function() {
+                const id = $(this).data('id');
+                showDefectDetails(id);
+            });
+        }
+        
+        // ฟังก์ชันเตรียมข้อมูลสำหรับตาราง
+        function prepareTableData(inspections) {
+            return inspections.map(inspection => {
+                // แปลงวันที่เป็นรูปแบบที่อ่านง่าย
+                const productionDate = new Date(inspection.production_date).toLocaleDateString('th-TH');
+                const createdAt = new Date(inspection.created_at).toLocaleDateString('th-TH');
+                
+                // แปลงค่า shift เป็นข้อความที่อ่านง่าย
+                let shiftText;
+                switch(inspection.shift) {
+                    case 'M': shiftText = 'M (เช้า)'; break;
+                    case 'A': shiftText = 'A (บ่าย)'; break;
+                    case 'N': shiftText = 'N (ดึก)'; break;
+                    default: shiftText = inspection.shift;
+                }
+                
+                // ตรวจสอบผลการตรวจสอบจากล็อตแรก (ถ้ามี)
+                let resultText = 'รอผล';
+                let resultClass = 'status-pending';
+                
+                if (typeof inspection.result !== 'undefined') {
+                    resultText = inspection.result === 'Accept' ? 'ผ่าน' : 'ไม่ผ่าน';
+                    resultClass = inspection.result === 'Accept' ? 'status-accept' : 'status-reject';
+                }
+                
+                // สร้างปุ่มสำหรับการจัดการ
+                const actions = `
+                    <a href="view.html?id=${inspection.id}" class="btn btn-sm btn-info" title="ดูรายละเอียด">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <a href="print.html?id=${inspection.id}" class="btn btn-sm btn-secondary" title="พิมพ์">
+                        <i class="fas fa-print"></i>
+                    </a>
+                `;
+                
+                // สร้างปุ่มสำหรับดูข้อบกพร่อง
+                const defects = `
+                    <button class="btn btn-sm btn-outline-warning defect-details-btn" data-id="${inspection.id}" title="ดูข้อบกพร่อง">
+                        <i class="fas fa-exclamation-triangle"></i> แสดง
+                    </button>
+                `;
+                
+                return {
+                    id: inspection.id,
+                    doc_pt: inspection.doc_pt,
+                    production_date: productionDate,
+                    shift: shiftText,
+                    item_number: inspection.item_number,
+                    machine_no: inspection.machine_no,
+                    total_product: inspection.total_product,
+                    result: `<span class="status-badge ${resultClass}">${resultText}</span>`,
+                    defects: defects,
+                    created_at: createdAt,
+                    actions: actions,
+                    // เก็บข้อมูลดิบไว้สำหรับการกรอง
+                    raw_production_date: inspection.production_date,
+                    raw_shift: inspection.shift,
+                    raw_machine: inspection.machine_no,
+                    raw_result: inspection.result
+                };
+            });
+        }
+        
+        // ฟังก์ชันแสดงรายละเอียดข้อบกพร่อง
+        function showDefectDetails(id) {
+            $('#loading-overlay').show();
+            
+            $.ajax({
+                url: `api/api.php?action=get_inspection&id=${id}`,
+                type: 'GET',
+                success: function(response) {
+                    try {
+                        const result = typeof response === 'object' ? response : JSON.parse(response);
+                        
+                        if (result.status === 'success') {
+                            renderDefectModalContent(result.data);
+                            $('#defectModal').modal('show');
+                        } else {
+                            showAlert('danger', `เกิดข้อผิดพลาด: ${result.message}`);
+                        }
+                    } catch (e) {
+                        showAlert('danger', 'เกิดข้อผิดพลาดในการรับข้อมูล');
+                        console.error('Error parsing response:', e, response);
+                    } finally {
+                        $('#loading-overlay').hide();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    $('#loading-overlay').hide();
+                    showAlert('danger', `เกิดข้อผิดพลาด: ${error}`);
+                }
+            });
+        }
+        
+        // ฟังก์ชันแสดงเนื้อหาข้อบกพร่องในหน้าต่าง Modal
+        function renderDefectModalContent(data) {
+            let hasDefects = false;
+            let modalContent = `
+                <div class="mb-3">
+                    <h6>ข้อมูลทั่วไป</h6>
+                    <table class="table table-bordered">
+                        <tr>
+                            <th width="150">Doc PT</th>
+                            <td>${data.doc_pt}</td>
+                            <th width="150">วันที่ผลิต</th>
+                            <td>${new Date(data.production_date).toLocaleDateString('th-TH')}</td>
+                        </tr>
+                        <tr>
+                            <th>Item Number</th>
+                            <td>${data.item_number}</td>
+                            <th>Machine No</th>
+                            <td>${data.machine_no}</td>
+                        </tr>
+                    </table>
+                </div>
+            `;
+            
+            // ตรวจสอบว่ามีล็อตข้อมูลหรือไม่
+            if (data.lots && data.lots.length > 0) {
+                // ตรวจสอบข้อบกพร่องในแต่ละล็อต
+                const defectsByLot = {};
+                
+                data.lots.forEach(lot => {
+                    if (lot.defects && lot.defects.length > 0) {
+                        hasDefects = true;
+                        defectsByLot[lot.lot_number] = lot.defects;
+                    }
+                });
+                
+                if (hasDefects) {
+                    modalContent += `<h6>รายการข้อบกพร่องที่พบ</h6>`;
+                    
+                    // แสดงข้อบกพร่องแยกตามล็อต
+                    Object.keys(defectsByLot).forEach(lotNumber => {
+                        const defects = defectsByLot[lotNumber];
+                        
+                        modalContent += `
+                            <div class="mb-3">
+                                <h6 class="text-primary">ล็อต: ${lotNumber}</h6>
+                                <table class="table table-bordered table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th width="40%">รหัสข้อบกพร่อง</th>
+                                            <th width="30%">จำนวน</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                        `;
+                        
+                        defects.forEach(defect => {
+                            modalContent += `
+                                <tr>
+                                    <td>${defect.defect_code}</td>
+                                    <td>${defect.defect_count}</td>
+                                </tr>
+                            `;
+                        });
+                        
+                        // คำนวณผลรวมข้อบกพร่องในล็อตนี้
+                        const totalDefects = defects.reduce((sum, defect) => sum + parseInt(defect.defect_count), 0);
+                        
+                        modalContent += `
+                                    <tr class="table-secondary">
+                                        <th>รวมทั้งหมด</th>
+                                        <th>${totalDefects}</th>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    });
+                } else {
+                    modalContent += `<div class="alert alert-info">ไม่พบข้อบกพร่องในการตรวจสอบนี้</div>`;
+                }
+            } else {
+                modalContent += `<div class="alert alert-info">ไม่พบข้อมูลล็อตในการตรวจสอบนี้</div>`;
+            }
+            
+            $('#defect-modal-content').html(modalContent);
+        }
+        
+        // ฟังก์ชันอัพเดทสรุปข้อมูล
+        function updateSummaryData(inspections) {
+            // จำนวนการตรวจสอบทั้งหมด
+            $('#total-inspections').text(inspections.length);
+            
+            // จำนวนที่ผ่านการตรวจสอบ
+            const acceptCount = inspections.filter(item => item.result === 'Accept').length;
+            $('#accept-inspections').text(acceptCount);
+            
+            // จำนวนที่ไม่ผ่านการตรวจสอบ
+            const rejectCount = inspections.filter(item => item.result === 'Reject').length;
+            $('#reject-inspections').text(rejectCount);
+            
+            // จำนวนการตรวจสอบวันนี้
+            const today = new Date().toISOString().split('T')[0]; // รูปแบบ YYYY-MM-DD
+            const todayCount = inspections.filter(item => item.created_at.startsWith(today)).length;
+            $('#today-inspections').text(todayCount);
+        }
+        
+        // ฟังก์ชันกรองข้อมูล
+        function applyFilters() {
+            $('#loading-overlay').show();
+            
+            // ดึงค่าจากตัวกรอง
+            const startDate = $('#date-range-start').val();
+            const endDate = $('#date-range-end').val();
+            const shift = $('#shift-filter').val();
+            const machine = $('#machine-filter').val();
+            const result = $('#result-filter').val();
+            
+            // กรองข้อมูล
+            let filteredData = allInspections;
+            
+            // กรองตามช่วงวันที่
+            if (startDate && endDate) {
+                filteredData = filteredData.filter(item => {
+                    const itemDate = new Date(item.production_date);
+                    const start = new Date(startDate);
+                    const end = new Date(endDate);
+                    end.setHours(23, 59, 59); // ตั้งค่าเวลาเป็นสิ้นสุดของวัน
+                    
+                    return itemDate >= start && itemDate <= end;
                 });
             }
             
             // กรองตามกะ
-            if (shiftFilter) {
-                filtered = filtered.filter(inspection => inspection.shift === shiftFilter);
+            if (shift) {
+                filteredData = filteredData.filter(item => item.shift === shift);
             }
             
-            // กรองตามวันที่
-            if (dateFilter) {
-                const filterDate = new Date(dateFilter);
-                filtered = filtered.filter(inspection => {
-                    const inspectionDate = new Date(inspection.production_date);
-                    return inspectionDate.toDateString() === filterDate.toDateString();
-                });
+            // กรองตามเครื่องจักร
+            if (machine) {
+                filteredData = filteredData.filter(item => item.machine_no === machine);
             }
             
-            // แสดงผลลัพธ์การกรอง
-            currentPage = 1;
-            displayInspections(filtered);
+            // กรองตามผลการตรวจสอบ
+            if (result) {
+                filteredData = filteredData.filter(item => item.result === result);
+            }
+            
+            // อัพเดทตาราง
+            updateTableWithFilteredData(filteredData);
+            
+            // อัพเดทสรุปข้อมูล
+            updateSummaryData(filteredData);
+            
+            $('#loading-overlay').hide();
         }
         
-        // ฟังก์ชันแสดงข้อมูลการตรวจสอบในตาราง
-        function displayInspections(inspections) {
-            if (inspections.length === 0) {
-                $('#inspection-list').html('<tr><td colspan="9" class="text-center">ไม่พบข้อมูลการตรวจสอบ</td></tr>');
-                $('#pagination').empty();
-                return;
-            }
-            
-            // คำนวณจำนวนหน้าทั้งหมด
-            const totalPages = Math.ceil(inspections.length / pageSize);
-            
-            // ดึงข้อมูลเฉพาะหน้าปัจจุบัน
-            const startIndex = (currentPage - 1) * pageSize;
-            const pageData = inspections.slice(startIndex, startIndex + pageSize);
-            
-            let html = '';
-            
-            pageData.forEach(function(inspection) {
-                const productionDate = new Date(inspection.production_date).toLocaleDateString('th-TH');
-                const createdAt = new Date(inspection.created_at).toLocaleDateString('th-TH');
+        // ฟังก์ชันอัพเดทตารางด้วยข้อมูลที่กรอง
+        function updateTableWithFilteredData(filteredData) {
+            if (dataTable) {
+                dataTable.clear();
                 
-                // แปลงค่าของกะให้แสดงตามรูปแบบใหม่
-                let shiftText;
-                switch(inspection.shift) {
-                    case 'M':
-                        shiftText = 'เช้า';
-                        break;
-                    case 'A':
-                        shiftText = 'บ่าย';
-                        break;
-                    case 'N':
-                        shiftText = 'ดึก';
-                        break;
-                    default:
-                        shiftText = inspection.shift;
+                if (filteredData.length > 0) {
+                    const tableData = prepareTableData(filteredData);
+                    dataTable.rows.add(tableData);
                 }
                 
-                html += `
-                    <tr>
-                        <td>${inspection.id}</td>
-                        <td>${inspection.doc_pt}</td>
-                        <td>${productionDate}</td>
-                        <td>${inspection.shift} (${shiftText})</td>
-                        <td>${inspection.item_number}</td>
-                        <td>${inspection.machine_no}</td>
-                        <td>${inspection.total_product}</td>
-                        <td>${createdAt}</td>
-                        <td>
-                            <a href="view.html?id=${inspection.id}" class="btn btn-sm btn-info">ดู</a>
-                            <a href="print.html?id=${inspection.id}" class="btn btn-sm btn-secondary">พิมพ์</a>
-                        </td>
-                    </tr>
-                `;
-            });
-            
-            $('#inspection-list').html(html);
-            
-            // สร้าง pagination
-            createPagination(totalPages);
+                dataTable.draw();
+            }
         }
         
-        // ฟังก์ชันสร้าง pagination
-        function createPagination(totalPages) {
-            let html = '';
-            
-            // ปุ่ม Previous
-            html += `
-                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-                    <a class="page-link" href="#" data-page="${currentPage - 1}">«</a>
-                </li>
+        // ฟังก์ชันแสดงข้อความแจ้งเตือน
+        function showAlert(type, message) {
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
             `;
             
-            // ปุ่มตัวเลขหน้า
-            for (let i = 1; i <= totalPages; i++) {
-                if (i === currentPage) {
-                    html += `<li class="page-item active"><span class="page-link">${i}</span></li>`;
-                } else {
-                    html += `<li class="page-item"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
-                }
-            }
+            // เพิ่ม alert เข้าไปก่อน main
+            $('main').prepend(alertHtml);
             
-            // ปุ่ม Next
-            html += `
-                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-                    <a class="page-link" href="#" data-page="${currentPage + 1}">»</a>
-                </li>
-            `;
-            
-            $('#pagination').html(html);
-            
-            // Event listener สำหรับการคลิกปุ่ม pagination
-            $('.page-link').on('click', function(e) {
-                e.preventDefault();
-                
-                if ($(this).parent().hasClass('disabled')) {
-                    return;
-                }
-                
-                currentPage = parseInt($(this).data('page'));
-                filterInspections();
-            });
+            // ลบข้อความหลังจาก 5 วินาที
+            setTimeout(() => {
+                $('.alert').alert('close');
+            }, 5000);
         }
     </script>
- </body>
- </html>
+</body>
+</html>

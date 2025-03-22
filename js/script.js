@@ -11,26 +11,33 @@ const defectCategories = [
     { id: 4, name: 'ข้อบกพร่องอื่นๆ (Others)' }
 ];
 
+// ปรับปรุงรายการข้อบกพร่อง - ใช้รูปแบบ ID ที่สอดคล้องกัน
 const defectTypes = [
     // กลุ่มข้อบกพร่องที่ผิว (Surface Defects)
-    { id: '1019', name: 'Dirty body', categoryId: 1 },
-    { id: '1052', name: 'Scratch', categoryId: 1 },
-    { id: '1001', name: 'Blister on surface', categoryId: 1 },
+    { id: 'D1019', name: 'Dirty body', categoryId: 1 },
+    { id: 'D1052', name: 'Scratch', categoryId: 1 },
+    { id: 'D1001', name: 'Blister on surface', categoryId: 1 },
+    { id: 'D1002', name: 'Stone', categoryId: 1 },
+    { id: 'D1003', name: 'Check', categoryId: 1 },
+    { id: 'D1004', name: 'Crack', categoryId: 1 },
     
     // กลุ่มข้อบกพร่องรูปทรง (Shape Defects)
-    { id: '1047', name: 'Rocker bottom', categoryId: 2 },
-    { id: '1012', name: 'Distorted', categoryId: 2 },
-    { id: '1015', name: 'Thin bottom', categoryId: 2 },
+    { id: 'D2047', name: 'Rocker bottom', categoryId: 2 },
+    { id: 'D2012', name: 'Distorted', categoryId: 2 },
+    { id: 'D2015', name: 'Thin bottom', categoryId: 2 },
+    { id: 'D2001', name: 'Uneven rim', categoryId: 2 },
+    { id: 'D2002', name: 'Warped', categoryId: 2 },
     
     // กลุ่มข้อบกพร่องจากการผลิต (Manufacturing Defects)
-    { id: '1106', name: 'Wrong Joint', categoryId: 3 },
-    { id: '1024', name: 'Blister', categoryId: 3 },
-    { id: 'Cold Mark', name: 'Cold Mark', categoryId: 3 },
-    { id: 'Cold Glass', name: 'Cold Glass', categoryId: 3 },
+    { id: 'D3106', name: 'Wrong Joint', categoryId: 3 },
+    { id: 'D3024', name: 'Blister', categoryId: 3 },
+    { id: 'D3001', name: 'Cold Mark', categoryId: 3 },
+    { id: 'D3002', name: 'Cold Glass', categoryId: 3 },
+    { id: 'D3003', name: 'Fold', categoryId: 3 },
+    { id: 'D3004', name: 'Glass Blob', categoryId: 3 },
     
     // กลุ่มข้อบกพร่องอื่นๆ (Others)
-    { id: '1099', name: 'Others', categoryId: 4 }
-    // เพิ่มข้อบกพร่องอื่นๆ ที่ต้องการ
+    { id: 'D4099', name: 'Others', categoryId: 4 }
 ];
 
 // ตัวแปรสำหรับเก็บข้อบกพร่องที่เลือก
@@ -331,7 +338,7 @@ function createQAFormHTML() {
                     <div class="col-md-6">
                         <label class="form-label">รายการข้อบกพร่องที่มี</label>
                         <div class="card">
-                            <div class="card-body defect-list-container" style="max-height: 200px; overflow-y: auto;">
+                            <div class="card-body defect-list-container" style="max-height: 300px; overflow-y: auto;">
                                 <div id="defect-list" class="row">
                                     <!-- Defect list will be populated here -->
                                 </div>
@@ -605,7 +612,7 @@ function validateForm() {
     return true;
 }
 
-// ฟังก์ชันเตรียมข้อมูลในส่วนข้อบกพร่อง
+// ฟังก์ชันเตรียมข้อมูลในส่วนข้อบกพร่อง (ปรับปรุงแล้ว)
 function initDefectsSection() {
     // ตั้งค่าตัวแปรเริ่มต้น
     let selectedCategory = 0;
@@ -631,17 +638,51 @@ function initDefectsSection() {
         return filtered;
     }
     
-    // แสดงรายการข้อบกพร่อง
+    // แสดงรายการข้อบกพร่อง (ปรับปรุงแล้ว)
     function renderDefectList() {
-        const defectsHtml = getFilteredDefects().map(defect => `
-            <div class="col-12 mb-2">
-                <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn" data-id="${defect.id}">
-                    <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
-                </button>
-            </div>
-        `).join('');
+        const filteredDefects = getFilteredDefects();
         
-        $('#defect-list').html(defectsHtml || '<div class="col-12 text-center py-3"><em>ไม่พบข้อบกพร่องที่ตรงกับเงื่อนไข</em></div>');
+        let defectsHtml = '';
+        
+        // แบ่งกลุ่มตามหมวดหมู่เพื่อการแสดงผลที่ดีขึ้น
+        if (selectedCategory === 0) {
+            // กรณีแสดงทั้งหมด แยกตามหมวดหมู่
+            defectCategories.forEach(category => {
+                const categoryDefects = filteredDefects.filter(d => d.categoryId === category.id);
+                
+                if (categoryDefects.length > 0) {
+                    defectsHtml += `<div class="col-12 mb-2"><h6 class="mt-2">${category.name}</h6></div>`;
+                    
+                    categoryDefects.forEach(defect => {
+                        defectsHtml += `
+                            <div class="col-md-6 col-lg-4 mb-2">
+                                <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn" data-id="${defect.id}">
+                                    <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
+                                </button>
+                            </div>
+                        `;
+                    });
+                }
+            });
+        } else {
+            // กรณีกรองตามหมวดหมู่
+            filteredDefects.forEach(defect => {
+                defectsHtml += `
+                    <div class="col-md-6 col-lg-4 mb-2">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn" data-id="${defect.id}">
+                            <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
+                        </button>
+                    </div>
+                `;
+            });
+        }
+        
+        // ถ้าไม่มีข้อมูล
+        if (!defectsHtml) {
+            defectsHtml = '<div class="col-12 text-center py-3"><em>ไม่พบข้อบกพร่องที่ตรงกับเงื่อนไข</em></div>';
+        }
+        
+        $('#defect-list').html(defectsHtml);
         
         // เพิ่ม event listeners สำหรับปุ่มเพิ่มข้อบกพร่อง
         $('.add-defect-btn').on('click', function(e) {
@@ -931,7 +972,7 @@ function saveFormData() {
     for (let i = 1; i <= 4; i++) {
         if ($(`#lot-number-${i}`).val()) {
             const lotData = {
-                lotNumber: $(`#lot-number-${i}`).val(),
+                lotNumber: `lot${i}`,
                 piecesPerLot: $(`#pieces-per-lot-${i}`).val() || 0,
                 description: $(`#description-${i}`).val() || '',
                 palletNo: $(`#pallet-no-${i}`).val() || '',
@@ -950,7 +991,6 @@ function saveFormData() {
     }
     
     // เก็บข้อมูลข้อบกพร่องจาก activeDefects
-    // ตรวจสอบว่ามีข้อบกพร่องที่เลือกหรือไม่
     if (activeDefects && activeDefects.length > 0) {
         // วนลูปผ่านแต่ละข้อบกพร่องที่เลือก
         activeDefects.forEach(defect => {
@@ -963,7 +1003,6 @@ function saveFormData() {
                     formData.defects.push({
                         lot: lot,
                         defectCode: defect.id,
-                        defectName: defect.name, // เพิ่มชื่อข้อบกพร่องเพื่อความสะดวกในการแสดงผล
                         count: count
                     });
                 }
@@ -986,8 +1025,21 @@ function saveFormData() {
         }
     });
     
-    // เพิ่ม debug log เพื่อตรวจสอบข้อมูล
-    console.log("ข้อมูลที่กำลังส่ง:", formData);
+    // Log ข้อมูลที่จะส่งไป
+    console.log("ข้อมูลที่จะส่งไปบันทึก:", JSON.stringify(formData));
+    
+    // ตรวจสอบว่ามีล็อตข้อมูลหรือไม่
+    if (formData.lots.length === 0) {
+        $('#save-status').removeClass('alert-info').addClass('alert-danger')
+            .html(`
+                <strong>เกิดข้อผิดพลาด!</strong><br>
+                กรุณาระบุข้อมูลล็อตอย่างน้อย 1 ล็อต<br>
+                <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
+                    <i class="fas fa-times"></i> ปิด
+                </button>
+            `);
+        return;
+    }
     
     // ส่งข้อมูลไปยัง API ด้วย AJAX
     $.ajax({
@@ -997,6 +1049,8 @@ function saveFormData() {
         data: JSON.stringify(formData),
         timeout: 30000, // เพิ่มค่า timeout เป็น 30 วินาที
         success: function(response) {
+            console.log("การตอบกลับจาก API:", response);
+            
             try {
                 // ตรวจสอบว่า response เป็น object หรือ string
                 const result = typeof response === 'object' ? response : JSON.parse(response);
@@ -1031,22 +1085,36 @@ function saveFormData() {
                                 <i class="fas fa-times"></i> ปิด
                             </button>
                         `);
+                    
+                    console.error('Error response:', result);
                 }
             } catch (e) {
                 // กรณีเกิดข้อผิดพลาดในการแปลง JSON
+                console.error('Error parsing response:', e);
+                console.log('Raw response:', response);
+                
                 $('#save-status').removeClass('alert-info').addClass('alert-danger')
                     .html(`
                         <strong>เกิดข้อผิดพลาด!</strong><br>
                         ไม่สามารถรับข้อมูลจากเซิร์ฟเวอร์ได้<br>
+                        <div class="mt-2">
+                            <p class="text-monospace small">ข้อความผิดพลาด: ${e.message}</p>
+                            <div class="alert alert-secondary p-2 small">
+                                <code>${response?.substr(0, 500) || 'ไม่มีข้อมูลตอบกลับ'}</code>
+                                ${response?.length > 500 ? '...' : ''}
+                            </div>
+                        </div>
                         <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
                             <i class="fas fa-times"></i> ปิด
                         </button>
                     `);
-                console.error('Error parsing response:', e, response);
             }
         },
         error: function(xhr, status, error) {
             // กรณีเกิด error จาก AJAX
+            console.error('AJAX Error:', status, error);
+            console.log('XHR Response:', xhr.responseText);
+            
             if (status === 'timeout') {
                 $('#save-status').removeClass('alert-info').addClass('alert-danger')
                     .html(`
@@ -1060,13 +1128,19 @@ function saveFormData() {
                 $('#save-status').removeClass('alert-info').addClass('alert-danger')
                     .html(`
                         <strong>เกิดข้อผิดพลาด!</strong><br>
-                        ${error}<br>
+                        ${error || 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์'}<br>
+                        <div class="mt-2">
+                            <p class="text-monospace small">สถานะ: ${status}</p>
+                            <div class="alert alert-secondary p-2 small">
+                                <code>${xhr.responseText?.substr(0, 500) || 'ไม่มีข้อมูลตอบกลับ'}</code>
+                                ${xhr.responseText?.length > 500 ? '...' : ''}
+                            </div>
+                        </div>
                         <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
                             <i class="fas fa-times"></i> ปิด
                         </button>
                     `);
             }
-            console.error('AJAX Error:', status, error, xhr.responseText);
         }
     });
 }

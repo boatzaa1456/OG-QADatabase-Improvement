@@ -31,6 +31,9 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 // อ่านข้อมูล JSON จาก input และจัดการกับ errors
 $jsonInput = file_get_contents('php://input');
 if (!empty($jsonInput)) {
+    // บันทึกข้อมูล input เพื่อตรวจสอบในภายหลัง
+    error_log("API Input for action '$action': " . $jsonInput);
+    
     $data = json_decode($jsonInput, true);
     
     // ตรวจสอบว่าการแปลง JSON สำเร็จหรือไม่
@@ -76,18 +79,31 @@ try {
             }
             break;
             
+        case 'get_summary':
+            if ($requestMethod === 'GET') {
+                // ดึงข้อมูลสรุปการตรวจสอบ
+                getSummaryData();
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Method not allowed. Use GET.']);
+            }
+            break;
+            
         default:
             // ถ้าไม่มี action ที่ตรงกัน ส่งข้อความ error กลับ
             echo json_encode(['status' => 'error', 'message' => 'Invalid action']);
             break;
     }
 } catch (Exception $e) {
+    error_log("API Error: " . $e->getMessage());
     echo json_encode(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()]);
 }
 
 // ฟังก์ชันบันทึกข้อมูลการตรวจสอบ
 function saveInspection($data) {
     try {
+        // เพิ่ม code เพื่อบันทึก raw input data เพื่อการ debug
+        error_log("Raw input data: " . json_encode($data));
+        
         $conn = getConnection();
         
         // ตรวจสอบข้อมูลที่จำเป็น
@@ -98,17 +114,29 @@ function saveInspection($data) {
         
         // ตรวจสอบฟิลด์ที่จำเป็น
         $requiredFields = ['docPT', 'productionDate', 'shift', 'itemNumber', 'machineNo', 'totalProduct', 'samplingDate', 'workOrder', 'inspector', 'supervisor'];
+        $missingFields = [];
+        
         foreach ($requiredFields as $field) {
             if (!isset($data[$field]) || empty($data[$field])) {
-                echo json_encode(['status' => 'error', 'message' => "Missing required field: $field"]);
-                return;
+                $missingFields[] = $field;
             }
+        }
+        
+        if (!empty($missingFields)) {
+            echo json_encode(['status' => 'error', 'message' => "Missing required fields: " . implode(', ', $missingFields)]);
+            return;
+        }
+        
+        // ตรวจสอบว่ามีข้อมูลล็อตหรือไม่
+        if (empty($data['lots']) || !is_array($data['lots'])) {
+            echo json_encode(['status' => 'error', 'message' => 'No lot data provided']);
+            return;
         }
         
         // เริ่ม transaction
         $conn->begin_transaction();
         
-        // เพิ่มบรรทัดนี้ตรงนี้ ก่อนใช้งาน $lotIds
+        // เตรียมข้อมูล $lotIds
         $lotIds = [];
         
         // 1. บันทึกข้อมูลหลักของการตรวจสอบ
@@ -131,26 +159,51 @@ function saveInspection($data) {
         $operation = isset($data['operation']) ? $data['operation'] : '';
         $remarks = isset($data['remarks']) ? $data['remarks'] : '';
         
-        $stmt->bind_param("sssssiiiiiisssssss", 
-            $data['docPT'], 
-            $data['productionDate'], 
-            $data['shift'], 
-            $data['itemNumber'], 
-            $gaugeMark, 
-            $productionType, 
-            $rework, 
-            $destroy, 
-            $useJig, 
-            $noJig, 
-            $data['machineNo'], 
-            $data['totalProduct'], 
-            $data['samplingDate'], 
-            $data['workOrder'], 
-            $operation, 
-            $data['inspector'], 
-            $data['supervisor'], 
-            $remarks
-        );
+        // ใช้ดักจับความผิดพลาดที่อาจเกิดขึ้น
+        try {
+            $stmt->bind_param("sssssiiiiiisssssss", 
+                $data['docPT'], 
+                $data['productionDate'], 
+                $data['shift'], 
+                $data['itemNumber'], 
+                $gaugeMark, 
+                $productionType, 
+                $rework, 
+                $destroy, 
+                $useJig, 
+                $noJig, 
+                $data['machineNo'], 
+                $data['totalProduct'], 
+                $data['samplingDate'], 
+                $data['workOrder'], 
+                $operation, 
+                $data['inspector'], 
+                $data['supervisor'], 
+                $remarks
+            );
+        } catch (Exception $e) {
+            throw new Exception("Parameter binding error: " . $e->getMessage() . 
+                                "\nParameters: " . json_encode([
+                                    'docPT' => $data['docPT'],
+                                    'productionDate' => $data['productionDate'],
+                                    'shift' => $data['shift'],
+                                    'itemNumber' => $data['itemNumber'],
+                                    'gaugeMark' => $gaugeMark,
+                                    'productionType' => $productionType,
+                                    'rework' => $rework,
+                                    'destroy' => $destroy,
+                                    'useJig' => $useJig,
+                                    'noJig' => $noJig,
+                                    'machineNo' => $data['machineNo'],
+                                    'totalProduct' => $data['totalProduct'],
+                                    'samplingDate' => $data['samplingDate'],
+                                    'workOrder' => $data['workOrder'],
+                                    'operation' => $operation,
+                                    'inspector' => $data['inspector'],
+                                    'supervisor' => $data['supervisor'],
+                                    'remarks' => $remarks
+                                ]));
+        }
         
         if (!$stmt->execute()) {
             throw new Exception("Execute statement failed: " . $stmt->error);
@@ -188,21 +241,26 @@ function saveInspection($data) {
                 $qp = isset($lot['qp']) ? $lot['qp'] : '';
                 $strainResult = isset($lot['strainResult']) ? $lot['strainResult'] : '';
                 
-                $stmt->bind_param("isissdisissss", 
-                    $inspectionId, 
-                    $lot['lotNumber'], 
-                    $piecesPerLot, 
-                    $description, 
-                    $palletNo, 
-                    $strainStd, 
-                    $firstSampleSize, 
-                    $firstSampleAcRe, 
-                    $secondSampleSize, 
-                    $secondSampleAcRe, 
-                    $result, 
-                    $qp, 
-                    $strainResult
-                );
+                try {
+                    $stmt->bind_param("isissdisissss", 
+                        $inspectionId, 
+                        $lot['lotNumber'], 
+                        $piecesPerLot, 
+                        $description, 
+                        $palletNo, 
+                        $strainStd, 
+                        $firstSampleSize, 
+                        $firstSampleAcRe, 
+                        $secondSampleSize, 
+                        $secondSampleAcRe, 
+                        $result, 
+                        $qp, 
+                        $strainResult
+                    );
+                } catch (Exception $e) {
+                    throw new Exception("Lot parameter binding error: " . $e->getMessage() . 
+                                       "\nLot data: " . json_encode($lot));
+                }
                 
                 if (!$stmt->execute()) {
                     throw new Exception("Execute lot statement failed: " . $stmt->error);
@@ -222,6 +280,7 @@ function saveInspection($data) {
                 // ตรวจสอบว่ามีล็อตที่เกี่ยวข้องหรือไม่
                 $lotKey = 'lot' . $defect['lot'];
                 if (!isset($lotIds[$lotKey])) {
+                    error_log("Missing lot for defect: " . json_encode($defect));
                     continue; // ข้ามถ้าไม่พบล็อต
                 }
                 
@@ -240,11 +299,16 @@ function saveInspection($data) {
                     throw new Exception("Prepare defect statement failed: " . $conn->error);
                 }
                 
-                $stmt->bind_param("isi", 
-                    $lotId, 
-                    $defect['defectCode'], 
-                    $count
-                );
+                try {
+                    $stmt->bind_param("isi", 
+                        $lotId, 
+                        $defect['defectCode'], 
+                        $count
+                    );
+                } catch (Exception $e) {
+                    throw new Exception("Defect parameter binding error: " . $e->getMessage() . 
+                                       "\nDefect data: " . json_encode($defect));
+                }
                 
                 if (!$stmt->execute()) {
                     throw new Exception("Execute defect statement failed: " . $stmt->error);
@@ -258,6 +322,7 @@ function saveInspection($data) {
                 // ตรวจสอบว่ามีล็อตที่เกี่ยวข้องหรือไม่
                 $lotKey = 'lot' . $measurement['lot'];
                 if (!isset($lotIds[$lotKey])) {
+                    error_log("Missing lot for strain measurement: " . json_encode($measurement));
                     continue; // ข้ามถ้าไม่พบล็อต
                 }
                 
@@ -275,11 +340,16 @@ function saveInspection($data) {
                     throw new Exception("Prepare strain statement failed: " . $conn->error);
                 }
                 
-                $stmt->bind_param("iid", 
-                    $lotId, 
-                    $measurement['position'], 
-                    $measurement['value']
-                );
+                try {
+                    $stmt->bind_param("iid", 
+                        $lotId, 
+                        $measurement['position'], 
+                        $measurement['value']
+                    );
+                } catch (Exception $e) {
+                    throw new Exception("Strain measurement parameter binding error: " . $e->getMessage() . 
+                                       "\nMeasurement data: " . json_encode($measurement));
+                }
                 
                 if (!$stmt->execute()) {
                     throw new Exception("Execute strain statement failed: " . $stmt->error);
@@ -299,6 +369,9 @@ function saveInspection($data) {
             $conn->rollback();
         }
         
+        // บันทึกข้อผิดพลาดไว้ในล็อก
+        error_log("Save inspection error: " . $e->getMessage());
+        
         // ส่งข้อความ error กลับ
         echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
     } finally {
@@ -314,15 +387,86 @@ function getInspections() {
     try {
         $conn = getConnection();
         
-        // คำสั่ง SQL สำหรับดึงข้อมูล
-        $sql = "SELECT id, doc_pt, production_date, shift, item_number, machine_no, total_product, created_at 
-                FROM inspections ORDER BY created_at DESC";
+        // รับพารามิเตอร์จากคำขอ GET
+        $startDate = isset($_GET['startDate']) ? $_GET['startDate'] : null;
+        $endDate = isset($_GET['endDate']) ? $_GET['endDate'] : null;
+        $shift = isset($_GET['shift']) ? $_GET['shift'] : null;
+        $machine = isset($_GET['machine']) ? $_GET['machine'] : null;
+        $item = isset($_GET['item']) ? $_GET['item'] : null;
+        $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 1000; // จำกัดจำนวนรายการที่ดึง
         
-        $result = $conn->query($sql);
+        // สร้างคำสั่ง SQL พื้นฐาน
+        $sql = "SELECT i.*, 
+                (SELECT result FROM inspection_lots WHERE inspection_id = i.id LIMIT 1) as result 
+                FROM inspections i WHERE 1=1";
         
-        if (!$result) {
-            throw new Exception("Query error: " . $conn->error);
+        // เพิ่มเงื่อนไขการกรอง
+        if ($startDate && $endDate) {
+            $sql .= " AND i.production_date BETWEEN ? AND ?";
         }
+        
+        if ($shift) {
+            $sql .= " AND i.shift = ?";
+        }
+        
+        if ($machine) {
+            $sql .= " AND i.machine_no = ?";
+        }
+        
+        if ($item) {
+            $sql .= " AND i.item_number LIKE ?";
+        }
+        
+        // เพิ่มการเรียงลำดับและจำกัดจำนวน
+        $sql .= " ORDER BY i.created_at DESC LIMIT ?";
+        
+        // เตรียมคำสั่ง SQL
+        $stmt = $conn->prepare($sql);
+        
+        // ผูกพารามิเตอร์
+        $bindTypes = "";
+        $bindParams = [];
+        
+        if ($startDate && $endDate) {
+            $bindTypes .= "ss";
+            $bindParams[] = $startDate;
+            $bindParams[] = $endDate;
+        }
+        
+        if ($shift) {
+            $bindTypes .= "s";
+            $bindParams[] = $shift;
+        }
+        
+        if ($machine) {
+            $bindTypes .= "s";
+            $bindParams[] = $machine;
+        }
+        
+        if ($item) {
+            $bindTypes .= "s";
+            $bindParams[] = "%$item%";
+        }
+        
+        // เพิ่มพารามิเตอร์ limit
+        $bindTypes .= "i";
+        $bindParams[] = $limit;
+        
+        // ผูกพารามิเตอร์ถ้ามี
+        if (!empty($bindParams)) {
+            $bindParamsRef = [];
+            $bindParamsRef[] = &$bindTypes;
+            
+            foreach ($bindParams as $key => $value) {
+                $bindParamsRef[] = &$bindParams[$key];
+            }
+            
+            call_user_func_array([$stmt, 'bind_param'], $bindParamsRef);
+        }
+        
+        // ดำเนินการคำสั่ง
+        $stmt->execute();
+        $result = $stmt->get_result();
         
         $inspections = [];
         if ($result->num_rows > 0) {
@@ -449,4 +593,118 @@ function getInspection($id) {
         }
     }
 }
-?>
+
+// ฟังก์ชันดึงสรุปข้อมูลการตรวจสอบ
+function getSummaryData() {
+    try {
+        $conn = getConnection();
+        
+        // สร้าง array สำหรับเก็บข้อมูลสรุป
+        $summary = [
+            'total' => 0,
+            'accept' => 0,
+            'reject' => 0,
+            'today' => 0,
+            'by_machine' => [],
+            'by_shift' => [],
+            'by_defect' => []
+        ];
+        
+        // 1. จำนวนการตรวจสอบทั้งหมด
+        $sql = "SELECT COUNT(*) as total FROM inspections";
+        $result = $conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $summary['total'] = intval($row['total']);
+        }
+        
+        // 2. จำนวนที่ผ่าน/ไม่ผ่านการตรวจสอบ
+        $sql = "SELECT il.result, COUNT(DISTINCT i.id) as count 
+                FROM inspections i
+                JOIN inspection_lots il ON i.id = il.inspection_id
+                WHERE il.result IN ('Accept', 'Reject')
+                GROUP BY il.result";
+        
+        $result = $conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                if ($row['result'] === 'Accept') {
+                    $summary['accept'] = intval($row['count']);
+                } else if ($row['result'] === 'Reject') {
+                    $summary['reject'] = intval($row['count']);
+                }
+            }
+        }
+        
+        // 3. จำนวนการตรวจสอบวันนี้
+        $sql = "SELECT COUNT(*) as today FROM inspections 
+                WHERE DATE(created_at) = CURDATE()";
+        
+        $result = $conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            $summary['today'] = intval($row['today']);
+        }
+        
+        // 4. จำนวนตามเครื่องจักร
+        $sql = "SELECT machine_no, COUNT(*) as count 
+                FROM inspections 
+                GROUP BY machine_no 
+                ORDER BY count DESC 
+                LIMIT 10";
+        
+        $result = $conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $summary['by_machine'][] = [
+                    'machine' => $row['machine_no'],
+                    'count' => intval($row['count'])
+                ];
+            }
+        }
+        
+        // 5. จำนวนตามกะ
+        $sql = "SELECT shift, COUNT(*) as count 
+                FROM inspections 
+                GROUP BY shift";
+        
+        $result = $conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $summary['by_shift'][] = [
+                    'shift' => $row['shift'],
+                    'count' => intval($row['count'])
+                ];
+            }
+        }
+        
+        // 6. จำนวนข้อบกพร่องที่พบมากที่สุด
+        $sql = "SELECT ld.defect_code, COUNT(*) as count 
+                FROM lot_defects ld
+                JOIN inspection_lots il ON ld.lot_id = il.id
+                GROUP BY ld.defect_code 
+                ORDER BY count DESC 
+                LIMIT 10";
+        
+        $result = $conn->query($sql);
+        if ($result && $result->num_rows > 0) {
+            while ($row = $result->fetch_assoc()) {
+                $summary['by_defect'][] = [
+                    'defect_code' => $row['defect_code'],
+                    'count' => intval($row['count'])
+                ];
+            }
+        }
+        
+        // ส่งข้อมูลกลับในรูปแบบ JSON
+        echo json_encode(['status' => 'success', 'data' => $summary]);
+        
+    } catch (Exception $e) {
+        echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
+    } finally {
+        // ปิดการเชื่อมต่อ
+        if (isset($conn) && $conn->ping()) {
+            $conn->close();
+        }
+    }
+}
