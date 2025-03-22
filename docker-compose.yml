@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Web Server and PHP Application
+  web:
+    build: .
+    container_name: oceanqa-web
+    ports:
+      - "80:80"
+    volumes:
+      - ./:/var/www/html/
+      - ./docker/apache/000-default.conf:/etc/apache2/sites-available/000-default.conf
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/app.ini
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_USER=qauser
+      - DB_PASS=qapassword
+      - DB_NAME=ocean_glass_qa
+    restart: unless-stopped
+
+  # MySQL Database
+  db:
+    image: mysql:8.0
+    container_name: oceanqa-db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./api/database.sql:/docker-entrypoint-initdb.d/database.sql
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=ocean_glass_qa
+      - MYSQL_USER=qauser
+      - MYSQL_PASSWORD=qapassword
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+
+  # phpMyAdmin (optional)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: oceanqa-phpmyadmin
+    ports:
+      - "8080:80"
+    environment:
+      - PMA_HOST=db
+      - PMA_PORT=3306
+      - MYSQL_ROOT_PASSWORD=rootpassword
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+    driver: local
