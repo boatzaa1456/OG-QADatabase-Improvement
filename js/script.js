@@ -33,6 +33,10 @@ const defectTypes = [
     // เพิ่มข้อบกพร่องอื่นๆ ที่ต้องการ
 ];
 
+// ตัวแปรสำหรับเก็บข้อบกพร่องที่เลือก
+let activeDefects = [];
+let selectedLot = 1;
+
 // เมื่อเอกสารโหลดเสร็จ
 $(document).ready(function() {
     // เรียกฟังก์ชันเพื่อแสดงแบบฟอร์ม
@@ -61,15 +65,15 @@ function createQAFormHTML() {
                 <h3>ข้อมูลทั่วไป</h3>
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label for="doc-pt" class="form-label">Doc: PT</label>
+                        <label for="doc-pt" class="form-label">Doc: PT <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="doc-pt" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label for="production-date" class="form-label">Production Date</label>
+                        <label for="production-date" class="form-label">Production Date <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" id="production-date" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Shift</label>
+                        <label class="form-label">Shift <span class="text-danger">*</span></label>
                         <div>
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="radio" name="shift" id="shift-m" value="M">
@@ -89,7 +93,7 @@ function createQAFormHTML() {
                 
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label for="item-number" class="form-label">Item Number</label>
+                        <label for="item-number" class="form-label">Item Number <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="item-number" required>
                     </div>
                     <div class="col-md-4 mb-3">
@@ -97,7 +101,7 @@ function createQAFormHTML() {
                         <input type="number" step="0.01" class="form-control" id="gauge-mark">
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Production Type</label>
+                        <label class="form-label">Production Type <span class="text-danger">*</span></label>
                         <div>
                             <div class="form-check form-check-inline">
                                 <input class="form-check-input" type="radio" name="production-type" id="production-1" value="1" checked>
@@ -128,22 +132,22 @@ function createQAFormHTML() {
                 
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <label for="machine-no" class="form-label">Machine No.</label>
+                        <label for="machine-no" class="form-label">Machine No. <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="machine-no" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label for="total-product" class="form-label">Total Product</label>
+                        <label for="total-product" class="form-label">Total Product <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" id="total-product" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label for="sampling-date" class="form-label">Sampling Date</label>
+                        <label for="sampling-date" class="form-label">Sampling Date <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" id="sampling-date" required>
                     </div>
                 </div>
                 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="work-order" class="form-label">Work Order</label>
+                        <label for="work-order" class="form-label">Work Order <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="work-order" required>
                     </div>
                     <div class="col-md-6 mb-3">
@@ -155,7 +159,7 @@ function createQAFormHTML() {
             
             <!-- ส่วนที่ 2: ข้อมูลล็อตและการสุ่มตัวอย่าง -->
             <div class="form-section">
-                <h3>ข้อมูลล็อตและการสุ่มตัวอย่าง</h3>
+                <h3>ข้อมูลล็อตและการสุ่มตัวอย่าง <span class="text-danger">*</span></h3>
                 
                 <div class="table-responsive">
                     <table class="table table-bordered">
@@ -170,14 +174,14 @@ function createQAFormHTML() {
                         </thead>
                         <tbody>
                             <tr>
-                                <th>LOT</th>
+                                <th>LOT <span class="text-danger">*</span></th>
                                 <td><input type="text" class="form-control" id="lot-number-1" placeholder="เช่น 1-11"></td>
                                 <td><input type="text" class="form-control" id="lot-number-2" placeholder="เช่น 12-22"></td>
                                 <td><input type="text" class="form-control" id="lot-number-3"></td>
                                 <td><input type="text" class="form-control" id="lot-number-4"></td>
                             </tr>
                             <tr>
-                                <th>จำนวนต่อล็อต</th>
+                                <th>จำนวนต่อล็อต <span class="text-danger">*</span></th>
                                 <td><input type="number" class="form-control" id="pieces-per-lot-1"></td>
                                 <td><input type="number" class="form-control" id="pieces-per-lot-2"></td>
                                 <td><input type="number" class="form-control" id="pieces-per-lot-3"></td>
@@ -291,15 +295,23 @@ function createQAFormHTML() {
             <div class="form-section" id="defects-section">
                 <h3>ข้อมูลข้อบกพร่อง</h3>
                 
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> เลือกล็อตที่ต้องการ จากนั้นเลือกข้อบกพร่องที่พบและระบุจำนวน คุณสามารถเลือกข้อบกพร่องได้หลายรายการต่อล็อต
+                </div>
+                
                 <div class="row mb-3">
                     <div class="col-md-6">
-                        <div class="input-group">
-                            <input type="text" id="defect-search" class="form-control" placeholder="ค้นหารหัสหรือชื่อข้อบกพร่อง...">
-                            <button class="btn btn-outline-secondary" type="button" id="clear-defect-search">ล้าง</button>
-                        </div>
+                        <label for="lot-selector" class="form-label">เลือกล็อตที่ต้องการระบุข้อบกพร่อง</label>
+                        <select id="lot-selector" class="form-select mb-2">
+                            <option value="1">ล็อต 1</option>
+                            <option value="2">ล็อต 2</option>
+                            <option value="3">ล็อต 3</option>
+                            <option value="4">ล็อต 4</option>
+                        </select>
                     </div>
                     <div class="col-md-6">
-                        <select id="defect-category" class="form-select">
+                        <label for="defect-category" class="form-label">ประเภทข้อบกพร่อง</label>
+                        <select id="defect-category" class="form-select mb-2">
                             <option value="0">ทุกประเภท</option>
                             ${defectCategories.map(category => 
                                 `<option value="${category.id}">${category.name}</option>`
@@ -309,59 +321,55 @@ function createQAFormHTML() {
                 </div>
                 
                 <div class="row mb-3">
-                    <div class="col-md-8">
+                    <div class="col-md-6">
+                        <label for="defect-search" class="form-label">ค้นหาข้อบกพร่อง</label>
+                        <div class="input-group">
+                            <input type="text" id="defect-search" class="form-control" placeholder="ค้นหารหัสหรือชื่อข้อบกพร่อง...">
+                            <button class="btn btn-outline-secondary" type="button" id="clear-defect-search">ล้าง</button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">รายการข้อบกพร่องที่มี</label>
                         <div class="card">
-                            <div class="card-header bg-light">รายการข้อบกพร่องที่มี</div>
-                            <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                            <div class="card-body defect-list-container" style="max-height: 200px; overflow-y: auto;">
                                 <div id="defect-list" class="row">
                                     <!-- Defect list will be populated here -->
                                 </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="col-md-4">
-                        <div class="card">
-                            <div class="card-header bg-light">เลือกล็อตที่ต้องการระบุข้อบกพร่อง</div>
-                            <div class="card-body">
-                                <div class="btn-group w-100" role="group">
-                                    <button type="button" class="btn btn-primary lot-selector" data-lot="1">ล็อต 1</button>
-                                    <button type="button" class="btn btn-outline-primary lot-selector" data-lot="2">ล็อต 2</button>
-                                    <button type="button" class="btn btn-outline-primary lot-selector" data-lot="3">ล็อต 3</button>
-                                    <button type="button" class="btn btn-outline-primary lot-selector" data-lot="4">ล็อต 4</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
                 
-                <div class="table-responsive">
-                    <table class="table table-bordered defect-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th width="10%">รหัส</th>
-                                <th width="25%">ข้อบกพร่อง</th>
-                                <th width="15%">ล็อต 1</th>
-                                <th width="15%">ล็อต 2</th>
-                                <th width="15%">ล็อต 3</th>
-                                <th width="15%">ล็อต 4</th>
-                                <th width="5%"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="active-defects">
-                            <!-- Active defects will be populated here -->
-                        </tbody>
-                        <tfoot>
-                            <tr class="table-secondary">
-                                <th colspan="2">TOTAL</th>
-                                <td id="total-defects-1">0</td>
-                                <td id="total-defects-2">0</td>
-                                <td id="total-defects-3">0</td>
-                                <td id="total-defects-4">0</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                <div class="mb-3">
+                    <label class="form-label">ข้อบกพร่องที่พบในแต่ละล็อต</label>
+                    <div class="table-responsive">
+                        <table class="table table-bordered defect-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 10%">รหัส</th>
+                                    <th style="width: 25%">ข้อบกพร่อง</th>
+                                    <th style="width: 15%">ล็อต 1</th>
+                                    <th style="width: 15%">ล็อต 2</th>
+                                    <th style="width: 15%">ล็อต 3</th>
+                                    <th style="width: 15%">ล็อต 4</th>
+                                    <th style="width: 5%"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="active-defects">
+                                <!-- จะแสดงข้อมูลข้อบกพร่องที่เลือกที่นี่ -->
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-secondary">
+                                    <th colspan="2">รวมทั้งหมด</th>
+                                    <td id="total-defects-1">0</td>
+                                    <td id="total-defects-2">0</td>
+                                    <td id="total-defects-3">0</td>
+                                    <td id="total-defects-4">0</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
                 </div>
             </div>
             
@@ -472,11 +480,11 @@ function createQAFormHTML() {
             
             <!-- ส่วนที่ 5: ข้อมูลการอนุมัติ -->
             <div class="form-section">
-                <h3>การอนุมัติ</h3>
+                <h3>การอนุมัติ <span class="text-danger">*</span></h3>
                 
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label for="inspector" class="form-label">Inspector</label>
+                        <label for="inspector" class="form-label">Inspector <span class="text-danger">*</span></label>
                         <select class="form-select" id="inspector" required>
                             <option value="">เลือกผู้ตรวจสอบ</option>
                             <option value="inspector1">ผู้ตรวจสอบ 1</option>
@@ -485,7 +493,7 @@ function createQAFormHTML() {
                         </select>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label for="supervisor" class="form-label">Supervisor</label>
+                        <label for="supervisor" class="form-label">Supervisor <span class="text-danger">*</span></label>
                         <select class="form-select" id="supervisor" required>
                             <option value="">เลือกผู้ตรวจทาน</option>
                             <option value="supervisor1">ผู้ตรวจทาน 1</option>
@@ -503,6 +511,12 @@ function createQAFormHTML() {
                 </div>
             </div>
             
+            <!-- แสดงข้อความแจ้งเตือน -->
+            <div id="validation-errors" class="alert alert-danger mt-3" style="display: none;">
+                <strong>กรุณาตรวจสอบข้อมูล:</strong>
+                <ul id="error-list"></ul>
+            </div>
+            
             <!-- ปุ่มบันทึก -->
             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                 <button type="button" class="btn btn-secondary me-md-2" id="clear-form">ล้างฟอร์ม</button>
@@ -517,7 +531,15 @@ function addFormEventListeners() {
     // Event listener สำหรับการส่งฟอร์ม
     $('#quality-form').on('submit', function(event) {
         event.preventDefault();
-        saveFormData();
+        
+        // ล้างข้อความแจ้งเตือนเดิม
+        $('#validation-errors').hide();
+        $('#error-list').empty();
+        
+        // ตรวจสอบความถูกต้องของข้อมูลก่อนบันทึก
+        if (validateForm()) {
+            saveFormData();
+        }
     });
     
     // Event listener สำหรับการล้างฟอร์ม
@@ -525,20 +547,70 @@ function addFormEventListeners() {
         clearForm();
     });
     
-    // เรียกใช้ฟังก์ชันเตรียมข้อมูลข้อบกพร่อง
+    // เตรียมข้อมูลในส่วนข้อบกพร่อง
     initDefectsSection();
     
     // คำนวณผลรวมเริ่มต้น
     calculateDefectTotals();
 }
 
+// ฟังก์ชันตรวจสอบความถูกต้องของฟอร์ม
+function validateForm() {
+    const errors = [];
+    
+    // ตรวจสอบข้อมูลทั่วไป
+    if (!$('#doc-pt').val()) errors.push('กรุณาระบุ Doc: PT');
+    if (!$('#production-date').val()) errors.push('กรุณาระบุวันที่ผลิต');
+    if (!$('input[name="shift"]:checked').val()) errors.push('กรุณาเลือกกะ');
+    if (!$('#item-number').val()) errors.push('กรุณาระบุ Item Number');
+    if (!$('#machine-no').val()) errors.push('กรุณาระบุ Machine No.');
+    if (!$('#total-product').val()) errors.push('กรุณาระบุจำนวนสินค้าทั้งหมด');
+    if (!$('#sampling-date').val()) errors.push('กรุณาระบุวันที่สุ่มตัวอย่าง');
+    if (!$('#work-order').val()) errors.push('กรุณาระบุ Work Order');
+    
+    // ตรวจสอบข้อมูลล็อต (ต้องมีอย่างน้อย 1 ล็อต)
+    let hasLot = false;
+    for (let i = 1; i <= 4; i++) {
+        if ($(`#lot-number-${i}`).val()) {
+            if (!$(`#pieces-per-lot-${i}`).val()) {
+                errors.push(`กรุณาระบุจำนวนต่อล็อตของล็อต ${i}`);
+            } else {
+                hasLot = true;
+            }
+        }
+    }
+    
+    if (!hasLot) {
+        errors.push('กรุณาระบุข้อมูลล็อตอย่างน้อย 1 ล็อต (LOT และจำนวน)');
+    }
+    
+    // ตรวจสอบข้อมูลการอนุมัติ
+    if (!$('#inspector').val()) errors.push('กรุณาเลือกผู้ตรวจสอบ');
+    if (!$('#supervisor').val()) errors.push('กรุณาเลือกผู้ตรวจทาน');
+    
+    // ถ้ามีข้อผิดพลาด แสดงข้อความแจ้งเตือน
+    if (errors.length > 0) {
+        const errorHtml = errors.map(error => `<li>${error}</li>`).join('');
+        $('#error-list').html(errorHtml);
+        $('#validation-errors').show();
+        
+        // เลื่อนไปยังข้อความแจ้งเตือน
+        $('html, body').animate({
+            scrollTop: $('#validation-errors').offset().top - 100
+        }, 500);
+        
+        return false;
+    }
+    
+    return true;
+}
+
 // ฟังก์ชันเตรียมข้อมูลในส่วนข้อบกพร่อง
 function initDefectsSection() {
     // ตั้งค่าตัวแปรเริ่มต้น
     let selectedCategory = 0;
-    let selectedLot = 1;
     let searchTerm = '';
-    let activeDefects = [];
+    selectedLot = 1; // ค่าเริ่มต้นเป็นล็อต 1
     
     // ฟังก์ชันช่วยกรองข้อบกพร่อง
     function getFilteredDefects() {
@@ -562,20 +634,18 @@ function initDefectsSection() {
     // แสดงรายการข้อบกพร่อง
     function renderDefectList() {
         const defectsHtml = getFilteredDefects().map(defect => `
-            <div class="col-md-6 mb-2">
-                <div class="d-grid">
-                    <button class="btn btn-outline-primary text-start add-defect-btn" data-id="${defect.id}">
-                        <small class="text-muted">${defect.id}</small><br>
-                        ${defect.name}
-                    </button>
-                </div>
+            <div class="col-12 mb-2">
+                <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn" data-id="${defect.id}">
+                    <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
+                </button>
             </div>
         `).join('');
         
         $('#defect-list').html(defectsHtml || '<div class="col-12 text-center py-3"><em>ไม่พบข้อบกพร่องที่ตรงกับเงื่อนไข</em></div>');
         
-        // เพิ่ม event listeners
-        $('.add-defect-btn').on('click', function() {
+        // เพิ่ม event listeners สำหรับปุ่มเพิ่มข้อบกพร่อง
+        $('.add-defect-btn').on('click', function(e) {
+            e.preventDefault(); // ป้องกันการเลื่อนหน้า
             const defectId = $(this).data('id');
             addDefect(defectId);
         });
@@ -583,28 +653,36 @@ function initDefectsSection() {
     
     // แสดงข้อบกพร่องที่เลือกไว้
     function renderActiveDefects() {
+        if (activeDefects.length === 0) {
+            $('#active-defects').html('<tr><td colspan="7" class="text-center text-muted py-3">ยังไม่มีข้อบกพร่องที่เลือก กรุณาเลือกข้อบกพร่องจากรายการด้านบน</td></tr>');
+            calculateDefectTotals();
+            return;
+        }
+        
         const activeDefectsHtml = activeDefects.map(defect => `
             <tr>
                 <td>${defect.id}</td>
                 <td>${defect.name}</td>
                 <td>
                     <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="1" value="${defect.counts[1]}">
+                           data-defect="${defect.id}" data-lot="1" value="${defect.counts[1] || 0}">
                 </td>
                 <td>
                     <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="2" value="${defect.counts[2]}">
+                           data-defect="${defect.id}" data-lot="2" value="${defect.counts[2] || 0}">
                 </td>
                 <td>
                     <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="3" value="${defect.counts[3]}">
+                           data-defect="${defect.id}" data-lot="3" value="${defect.counts[3] || 0}">
                 </td>
                 <td>
                     <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="4" value="${defect.counts[4]}">
+                           data-defect="${defect.id}" data-lot="4" value="${defect.counts[4] || 0}">
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-danger remove-defect-btn" data-id="${defect.id}">ลบ</button>
+                    <button type="button" class="btn btn-sm btn-danger remove-defect-btn" data-id="${defect.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </td>
             </tr>
         `).join('');
@@ -619,7 +697,8 @@ function initDefectsSection() {
             updateDefectCount(defectId, lot, value);
         });
         
-        $('.remove-defect-btn').on('click', function() {
+        $('.remove-defect-btn').on('click', function(e) {
+            e.preventDefault(); // ป้องกันการเลื่อนหน้า
             const defectId = $(this).data('id');
             removeDefect(defectId);
         });
@@ -630,22 +709,45 @@ function initDefectsSection() {
     
     // เพิ่มข้อบกพร่องในรายการที่เลือก
     function addDefect(defectId) {
+        // ตรวจสอบว่ามีข้อบกพร่องนี้อยู่แล้วหรือไม่
         if (!activeDefects.some(d => d.id === defectId)) {
             const defect = defectTypes.find(d => d.id === defectId);
             if (defect) {
-                activeDefects.push({
+                // สร้างออบเจกต์ใหม่ที่มีค่าเริ่มต้นสำหรับแต่ละล็อต
+                const newDefect = {
                     ...defect,
                     counts: { 1: 0, 2: 0, 3: 0, 4: 0 }
-                });
+                };
+                
+                // กำหนดค่าเริ่มต้นเป็น 1 สำหรับล็อตที่เลือก
+                newDefect.counts[selectedLot] = 1;
+                
+                // เพิ่มเข้าในรายการ
+                activeDefects.push(newDefect);
+                
+                // แสดงผลอีกครั้ง
                 renderActiveDefects();
+                
+                // แสดงข้อความแจ้งเตือนสำเร็จ
+                showAlert('success', `เพิ่มข้อบกพร่อง "${defect.name}" ในล็อต ${selectedLot} เรียบร้อยแล้ว`);
             }
+        } else {
+            // ถ้ามีแล้ว ให้เพิ่มจำนวนในล็อตที่เลือก
+            updateDefectCount(defectId, selectedLot, (activeDefects.find(d => d.id === defectId).counts[selectedLot] || 0) + 1);
+            showAlert('info', `เพิ่มจำนวนข้อบกพร่อง "${defectTypes.find(d => d.id === defectId).name}" ในล็อต ${selectedLot}`);
         }
     }
     
     // ลบข้อบกพร่องจากรายการที่เลือก
     function removeDefect(defectId) {
-        activeDefects = activeDefects.filter(d => d.id !== defectId);
-        renderActiveDefects();
+        const defectToRemove = activeDefects.find(d => d.id === defectId);
+        if (defectToRemove) {
+            activeDefects = activeDefects.filter(d => d.id !== defectId);
+            renderActiveDefects();
+            
+            // แสดงข้อความแจ้งเตือนลบสำเร็จ
+            showAlert('info', `ลบข้อบกพร่อง "${defectToRemove.name}" เรียบร้อยแล้ว`);
+        }
     }
     
     // อัพเดทจำนวนข้อบกพร่อง
@@ -663,7 +765,32 @@ function initDefectsSection() {
             return defect;
         });
         
+        // อัพเดทผลรวม
         calculateDefectTotals();
+    }
+    
+    // แสดงข้อความแจ้งเตือน
+    function showAlert(type, message) {
+        // ซ่อนการแจ้งเตือนเดิม
+        $('#defect-alert').remove();
+        
+        // สร้างอิลิเมนต์ alert
+        const alertHtml = `
+            <div id="defect-alert" class="alert alert-${type} alert-dismissible fade show mt-2 mb-3" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        `;
+        
+        // เพิ่ม alert เข้าไปที่ส่วนบนของ defects section
+        $('#defects-section').prepend(alertHtml);
+        
+        // ลบ alert หลังจาก 3 วินาที
+        setTimeout(() => {
+            $('#defect-alert').fadeOut(function() {
+                $(this).remove();
+            });
+        }, 3000);
     }
     
     // เพิ่ม event listeners
@@ -672,7 +799,8 @@ function initDefectsSection() {
         renderDefectList();
     });
     
-    $('#clear-defect-search').on('click', function() {
+    $('#clear-defect-search').on('click', function(e) {
+        e.preventDefault(); // ป้องกันการเลื่อนหน้า
         $('#defect-search').val('');
         searchTerm = '';
         renderDefectList();
@@ -683,23 +811,26 @@ function initDefectsSection() {
         renderDefectList();
     });
     
-    $('.lot-selector').on('click', function() {
-        $('.lot-selector').removeClass('btn-primary').addClass('btn-outline-primary');
-        $(this).removeClass('btn-outline-primary').addClass('btn-primary');
-        selectedLot = parseInt($(this).data('lot'));
+    $('#lot-selector').on('change', function() {
+        selectedLot = parseInt($(this).val());
     });
     
     // เริ่มต้นแสดงรายการข้อบกพร่อง
     renderDefectList();
+    renderActiveDefects();
 }
 
 // ฟังก์ชันคำนวณผลรวมข้อบกพร่อง
 function calculateDefectTotals() {
+    // คำนวณผลรวมสำหรับแต่ละล็อต
     for (let lot = 1; lot <= 4; lot++) {
         let total = 0;
-        $(`.defect-count-input[data-lot="${lot}"]`).each(function() {
-            total += parseInt($(this).val()) || 0;
+        
+        // ใช้ข้อมูลจาก activeDefects
+        activeDefects.forEach(defect => {
+            total += parseInt(defect.counts[lot]) || 0;
         });
+        
         $(`#total-defects-${lot}`).text(total);
     }
 }
@@ -708,25 +839,62 @@ function calculateDefectTotals() {
 function clearForm() {
     if (confirm('คุณต้องการล้างข้อมูลทั้งหมดในฟอร์มนี้ใช่หรือไม่?')) {
         $('#quality-form')[0].reset();
+        
+        // ล้างข้อมูลข้อบกพร่อง
+        activeDefects = [];
         $('#active-defects').empty();
         calculateDefectTotals();
         
+        // ซ่อนข้อความแจ้งเตือน
+        $('#validation-errors').hide();
+        
         // ตั้งค่าล็อตกลับเป็นค่าเริ่มต้น
-        $('.lot-selector').removeClass('btn-primary').addClass('btn-outline-primary');
-        $('.lot-selector[data-lot="1"]').removeClass('btn-outline-primary').addClass('btn-primary');
+        $('#lot-selector').val(1);
+        selectedLot = 1;
         
         // รีเซ็ตการค้นหาข้อบกพร่อง
         $('#defect-search').val('');
         $('#defect-category').val(0);
-        $('#defect-list').empty();
         
         // รีโหลดรายการข้อบกพร่อง
         initDefectsSection();
+        
+        // แสดงข้อความแจ้งเตือน
+        showAlert('info', 'ล้างข้อมูลแบบฟอร์มเรียบร้อยแล้ว');
     }
+}
+
+// แสดงข้อความแจ้งเตือนทั่วไป
+function showAlert(type, message) {
+    // ซ่อนการแจ้งเตือนเดิม
+    $('#alert-message').remove();
+    
+    // สร้างอิลิเมนต์ alert
+    const alertHtml = `
+        <div id="alert-message" class="alert alert-${type} alert-dismissible fade show mt-3 mb-3" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+    
+    // เพิ่ม alert เข้าไปที่ส่วนบนของ form
+    $('#quality-form').prepend(alertHtml);
+    
+    // ลบ alert หลังจาก 3 วินาที
+    setTimeout(() => {
+        $('#alert-message').fadeOut(function() {
+            $(this).remove();
+        });
+    }, 3000);
 }
 
 // ฟังก์ชันบันทึกข้อมูลจากฟอร์ม
 function saveFormData() {
+    // แสดงข้อความกำลังบันทึกข้อมูล
+    const saveStatus = $('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
+    $('#save-status').remove(); // ลบข้อความเดิม (ถ้ามี)
+    $('#quality-form').append(saveStatus);
+    
     // เก็บข้อมูลจากฟอร์ม
     const formData = {
         // ข้อมูลทั่วไป
@@ -761,41 +929,47 @@ function saveFormData() {
     
     // เก็บข้อมูลล็อต
     for (let i = 1; i <= 4; i++) {
-        const lotData = {
-            lotNumber: $(`#lot-number-${i}`).val(),
-            piecesPerLot: $(`#pieces-per-lot-${i}`).val(),
-            description: $(`#description-${i}`).val(),
-            palletNo: $(`#pallet-no-${i}`).val(),
-            strainStd: $(`#strain-std-${i}`).val(),
-            firstSampleSize: $(`#first-sample-size-${i}`).val(),
-            firstSampleAcRe: $(`#first-sample-ac-re-${i}`).val(),
-            secondSampleSize: $(`#second-sample-size-${i}`).val(),
-            secondSampleAcRe: $(`#second-sample-ac-re-${i}`).val(),
-            result: $(`input[name="result-${i}"]:checked`).val(),
-            qp: $(`#qp-${i}`).val(),
-            strainResult: $(`input[name="strain-result-${i}"]:checked`).val()
-        };
-        
-        // เพิ่มข้อมูลล็อตเข้าอาร์เรย์เฉพาะเมื่อมีการกรอกข้อมูล
-        if (lotData.lotNumber) {
+        if ($(`#lot-number-${i}`).val()) {
+            const lotData = {
+                lotNumber: $(`#lot-number-${i}`).val(),
+                piecesPerLot: $(`#pieces-per-lot-${i}`).val() || 0,
+                description: $(`#description-${i}`).val() || '',
+                palletNo: $(`#pallet-no-${i}`).val() || '',
+                strainStd: $(`#strain-std-${i}`).val() || null,
+                firstSampleSize: $(`#first-sample-size-${i}`).val() || null,
+                firstSampleAcRe: $(`#first-sample-ac-re-${i}`).val() || '',
+                secondSampleSize: $(`#second-sample-size-${i}`).val() || null,
+                secondSampleAcRe: $(`#second-sample-ac-re-${i}`).val() || '',
+                result: $(`input[name="result-${i}"]:checked`).val() || '',
+                qp: $(`#qp-${i}`).val() || '',
+                strainResult: $(`input[name="strain-result-${i}"]:checked`).val() || ''
+            };
+            
             formData.lots.push(lotData);
         }
     }
     
-    // เก็บข้อมูลข้อบกพร่อง (จากตารางข้อบกพร่องที่เลือก)
-    $('.defect-count-input').each(function() {
-        const defectId = $(this).data('defect');
-        const lot = $(this).data('lot');
-        const count = parseInt($(this).val()) || 0;
-        
-        if (count > 0) {
-            formData.defects.push({
-                lot: lot,
-                defectCode: defectId,
-                count: count
-            });
-        }
-    });
+    // เก็บข้อมูลข้อบกพร่องจาก activeDefects
+    // ตรวจสอบว่ามีข้อบกพร่องที่เลือกหรือไม่
+    if (activeDefects && activeDefects.length > 0) {
+        // วนลูปผ่านแต่ละข้อบกพร่องที่เลือก
+        activeDefects.forEach(defect => {
+            // วนลูปผ่านแต่ละล็อต (1-4)
+            for (let lot = 1; lot <= 4; lot++) {
+                // ดึงจำนวนข้อบกพร่องในล็อตนี้
+                const count = parseInt(defect.counts[lot]) || 0;
+                // บันทึกเฉพาะกรณีที่มีจำนวนมากกว่า 0
+                if (count > 0) {
+                    formData.defects.push({
+                        lot: lot,
+                        defectCode: defect.id,
+                        defectName: defect.name, // เพิ่มชื่อข้อบกพร่องเพื่อความสะดวกในการแสดงผล
+                        count: count
+                    });
+                }
+            }
+        });
+    }
     
     // เก็บข้อมูลการวัดความเครียด
     $('.strain-input').each(function() {
@@ -812,42 +986,15 @@ function saveFormData() {
         }
     });
     
-    // ตรวจสอบว่ามีการกรอกข้อมูลพื้นฐานครบถ้วนหรือไม่
-    if (!formData.docPT || !formData.productionDate || !formData.shift || !formData.itemNumber || !formData.machineNo || !formData.totalProduct || !formData.samplingDate || !formData.workOrder) {
-        alert('กรุณากรอกข้อมูลพื้นฐานให้ครบถ้วน');
-        return;
-    }
-    
-    // ตรวจสอบว่ามีการเลือกผู้ตรวจสอบและผู้ตรวจทาน
-    if (!formData.inspector || !formData.supervisor) {
-        alert('กรุณาเลือกผู้ตรวจสอบและผู้ตรวจทาน');
-        return;
-    }
-    
-    // ตรวจสอบว่ามีการกรอกข้อมูลล็อตอย่างน้อย 1 ล็อตหรือไม่
-    if (formData.lots.length === 0) {
-        alert('กรุณากรอกข้อมูลล็อตอย่างน้อย 1 ล็อต');
-        return;
-    }
-    
-    // ส่งข้อมูลไปยังเซิร์ฟเวอร์
-    sendDataToServer(formData);
-}
-
-// ฟังก์ชันสำหรับส่งข้อมูลไปยังเซิร์ฟเวอร์
-function sendDataToServer(data) {
-    // แสดงข้อความกำลังบันทึกข้อมูล
-    $('#qa-form').append('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
-    
-    // เพิ่ม console.log เพื่อดูข้อมูลที่ส่ง (สำหรับการพัฒนา)
-    console.log("ข้อมูลที่กำลังส่ง:", data);
+    // เพิ่ม debug log เพื่อตรวจสอบข้อมูล
+    console.log("ข้อมูลที่กำลังส่ง:", formData);
     
     // ส่งข้อมูลไปยัง API ด้วย AJAX
     $.ajax({
         url: 'api/api.php?action=save_inspection',
         type: 'POST',
         contentType: 'application/json',
-        data: JSON.stringify(data),
+        data: JSON.stringify(formData),
         timeout: 30000, // เพิ่มค่า timeout เป็น 30 วินาที
         success: function(response) {
             try {
@@ -857,29 +1004,67 @@ function sendDataToServer(data) {
                 if (result.status === 'success') {
                     // แสดงข้อความสำเร็จ
                     $('#save-status').removeClass('alert-info').addClass('alert-success')
-                        .html(`บันทึกข้อมูลเรียบร้อย (ID: ${result.id})<br>
-                             <a href="view.html?id=${result.id}" class="btn btn-sm btn-primary mt-2">ดูข้อมูลที่บันทึก</a>
-                             <button class="btn btn-sm btn-secondary mt-2 ms-2" onclick="clearForm()">เริ่มบันทึกใหม่</button>`);
+                        .html(`
+                            <strong>บันทึกข้อมูลเรียบร้อย!</strong><br>
+                            หมายเลขการตรวจสอบ: ${result.id}<br>
+                            <div class="mt-3">
+                                <a href="view.html?id=${result.id}" class="btn btn-primary">
+                                    <i class="fas fa-eye"></i> ดูข้อมูลที่บันทึก
+                                </a>
+                                <button class="btn btn-secondary ms-2" onclick="clearForm()">
+                                    <i class="fas fa-plus"></i> เริ่มบันทึกใหม่
+                                </button>
+                            </div>
+                        `);
+                    
+                    // เลื่อนไปยังข้อความสำเร็จ
+                    $('html, body').animate({
+                        scrollTop: $('#save-status').offset().top - 100
+                    }, 500);
                 } else {
                     // แสดงข้อความผิดพลาด
                     $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                        .html(`เกิดข้อผิดพลาด: ${result.message}`);
+                        .html(`
+                            <strong>เกิดข้อผิดพลาด!</strong><br>
+                            ${result.message}<br>
+                            <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
+                                <i class="fas fa-times"></i> ปิด
+                            </button>
+                        `);
                 }
             } catch (e) {
                 // กรณีเกิดข้อผิดพลาดในการแปลง JSON
                 $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                    .html('เกิดข้อผิดพลาดในการรับข้อมูลจากเซิร์ฟเวอร์');
+                    .html(`
+                        <strong>เกิดข้อผิดพลาด!</strong><br>
+                        ไม่สามารถรับข้อมูลจากเซิร์ฟเวอร์ได้<br>
+                        <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
+                            <i class="fas fa-times"></i> ปิด
+                        </button>
+                    `);
                 console.error('Error parsing response:', e, response);
             }
         },
         error: function(xhr, status, error) {
-            // เพิ่มการตรวจสอบกรณีหมดเวลา
+            // กรณีเกิด error จาก AJAX
             if (status === 'timeout') {
                 $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                    .html('การเชื่อมต่อหมดเวลา กรุณาลองอีกครั้ง');
+                    .html(`
+                        <strong>เกิดข้อผิดพลาด!</strong><br>
+                        การเชื่อมต่อหมดเวลา กรุณาลองอีกครั้ง<br>
+                        <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
+                            <i class="fas fa-times"></i> ปิด
+                        </button>
+                    `);
             } else {
                 $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                    .html(`เกิดข้อผิดพลาดในการส่งข้อมูล: ${error}`);
+                    .html(`
+                        <strong>เกิดข้อผิดพลาด!</strong><br>
+                        ${error}<br>
+                        <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
+                            <i class="fas fa-times"></i> ปิด
+                        </button>
+                    `);
             }
             console.error('AJAX Error:', status, error, xhr.responseText);
         }
