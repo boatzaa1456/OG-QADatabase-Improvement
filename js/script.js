@@ -1610,4 +1610,637 @@ function initDefectsSection() {
                                data-defect="${defect.id}" data-lot="4" value="${defect.counts[4] || 0}">
                     </td>
                     <td>
-                        <button type="button" class="btn btn-sm btn
+                        <button type="button" class="btn btn-sm btn-danger remove-defect-btn" data-defect="${defect.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        $('#active-defects').html(activeDefectsHtml);
+        
+        // Add event listeners for defect count inputs
+        $('.defect-count-input').on('change', function() {
+            const defectId = $(this).data('defect');
+            const lot = $(this).data('lot');
+            const count = parseInt($(this).val()) || 0;
+            
+            // Update activeDefects with new count
+            const defect = activeDefects.find(d => d.id === defectId);
+            if (defect) {
+                defect.counts[lot] = count;
+                isFormDirty = true;
+            }
+            
+            // Recalculate totals
+            calculateDefectTotals();
+        });
+        
+        // Add event listeners for remove buttons
+        $('.remove-defect-btn').on('click', function() {
+            const defectId = $(this).data('defect');
+            removeDefect(defectId);
+        });
+        
+        // Calculate totals after rendering
+        calculateDefectTotals();
+    }
+}
+
+/**
+ * Add a defect to the active defects list
+ * @param {string} defectId ID of the defect to add
+ */
+function addDefect(defectId) {
+    // Check if defect already exists
+    if (activeDefects.some(d => d.id === defectId)) {
+        showAlert('info', 'ข้อบกพร่องนี้ถูกเพิ่มไว้แล้ว', 2000);
+        return;
+    }
+    
+    // Find defect in the list of all defects
+    const defect = defectTypes.find(d => d.id === defectId);
+    if (!defect) return;
+    
+    // Add to active defects with zero counts for each lot
+    const newDefect = {
+        ...defect,
+        counts: { 1: 0, 2: 0, 3: 0, 4: 0 }
+    };
+    
+    // Set selected lot count to 1 by default
+    newDefect.counts[selectedLot] = 1;
+    
+    activeDefects.push(newDefect);
+    isFormDirty = true;
+    
+    // Re-render the defects table
+    renderActiveDefects();
+    
+    showAlert('success', `เพิ่มข้อบกพร่อง ${defect.name} แล้ว`, 2000, true);
+}
+
+/**
+ * Remove a defect from the active defects list
+ * @param {string} defectId ID of the defect to remove
+ */
+function removeDefect(defectId) {
+    const index = activeDefects.findIndex(d => d.id === defectId);
+    if (index !== -1) {
+        const defectName = activeDefects[index].name;
+        activeDefects.splice(index, 1);
+        isFormDirty = true;
+        renderActiveDefects();
+        showAlert('success', `ลบข้อบกพร่อง ${defectName} แล้ว`, 2000, true);
+    }
+}
+
+/**
+ * Calculate totals for defects in each lot
+ */
+function calculateDefectTotals() {
+    // Initialize totals
+    const totals = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    
+    // Calculate sum for each lot
+    activeDefects.forEach(defect => {
+        for (let lot = 1; lot <= 4; lot++) {
+            totals[lot] += parseInt(defect.counts[lot] || 0);
+        }
+    });
+    
+    // Update total display
+    for (let lot = 1; lot <= 4; lot++) {
+        $(`#total-defects-${lot}`).text(totals[lot]);
+    }
+}
+
+/**
+ * Save form data to the server
+ */
+function saveFormData() {
+    try {
+        const formData = collectFormData();
+        
+        $.ajax({
+            url: 'api/api.php?action=save_inspection',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            timeout: 30000,
+            success: function(response) {
+                $('#loading-overlay').hide();
+                
+                try {
+                    const result = typeof response === 'object' ? response : JSON.parse(response);
+                    
+                    if (result.status === 'success') {
+                        // Update version for optimistic locking
+                        formVersion = result.version || (formVersion + 1);
+                        $('#form-version').val(formVersion);
+                        
+                        showAlert('success', 'บันทึกข้อมูลเรียบร้อยแล้ว', 3000);
+                        
+                        // Clear saved form state in localStorage
+                        clearSavedFormState();
+                        
+                        // Reset form dirty flag
+                        isFormDirty = false;
+                        
+                        // Show success screen with options
+                        showSuccessScreen(result.id);
+                    } else {
+                        showAlert('danger', 'เกิดข้อผิดพลาด: ' + result.message, 5000);
+                    }
+                } catch (e) {
+                    console.error('Error parsing response:', e, response);
+                    showAlert('danger', 'เกิดข้อผิดพลาดในการประมวลผลการตอบกลับ', 5000);
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#loading-overlay').hide();
+                
+                if (status === 'timeout') {
+                    showAlert('danger', 'การเชื่อมต่อหมดเวลา กรุณาลองใหม่อีกครั้ง', 5000);
+                    
+                    // Save to localStorage as backup
+                    saveFormState();
+                    showAlert('info', 'บันทึกข้อมูลไว้ในเครื่องชั่วคราวแล้ว', 3000);
+                } else if (xhr.status === 409) {
+                    // Concurrency error
+                    handleConcurrencyError();
+                } else {
+                    showAlert('danger', 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error, 5000);
+                }
+                
+                console.error('AJAX Error:', status, error, xhr.responseText);
+            },
+            complete: function() {
+                isSubmitting = false;
+            }
+        });
+    } catch (e) {
+        $('#loading-overlay').hide();
+        isSubmitting = false;
+        console.error('Error in saveFormData:', e);
+        showAlert('danger', 'เกิดข้อผิดพลาด: ' + e.message, 5000);
+    }
+}
+
+/**
+ * Show success screen after form submission
+ * @param {string} id Inspection ID
+ */
+function showSuccessScreen(id) {
+    // Create success screen HTML
+    const successHtml = `
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="fas fa-check-circle text-success" style="font-size: 64px;"></i>
+            </div>
+            <h3 class="mb-4">บันทึกข้อมูลเรียบร้อยแล้ว</h3>
+            <p class="mb-4">รหัสการตรวจสอบ: <strong>${id}</strong></p>
+            <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                <a href="view.html?id=${id}" class="btn btn-primary">
+                    <i class="fas fa-eye"></i> ดูรายละเอียด
+                </a>
+                <a href="print.html?id=${id}" class="btn btn-info">
+                    <i class="fas fa-print"></i> พิมพ์รายงาน
+                </a>
+                <a href="index.html" class="btn btn-outline-secondary">
+                    <i class="fas fa-plus-circle"></i> สร้างรายการใหม่
+                </a>
+            </div>
+        </div>
+    `;
+    
+    // Replace form with success screen
+    $('#quality-form').html(successHtml);
+    
+    // Scroll to top
+    window.scrollTo(0, 0);
+}
+
+/**
+ * Clear form data
+ */
+function clearForm() {
+    if (confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมด?')) {
+        // Clear all form fields
+        $('#quality-form')[0].reset();
+        
+        // Clear active defects
+        activeDefects = [];
+        renderActiveDefects();
+        
+        // Clear localStorage
+        clearSavedFormState();
+        
+        // Reset form version
+        formVersion = 1;
+        $('#form-version').val(formVersion);
+        
+        // Reset form dirty flag
+        isFormDirty = false;
+        
+        showAlert('success', 'ล้างข้อมูลเรียบร้อยแล้ว', 3000);
+    }
+}
+
+/**
+ * Show alert message
+ * @param {string} type Alert type ('success', 'danger', 'warning', 'info')
+ * @param {string} message Message to display
+ * @param {number} duration Duration in milliseconds (0 for no auto-hide)
+ * @param {boolean} isAutoSave Whether this is an auto-save notification
+ */
+function showAlert(type, message, duration = 5000, isAutoSave = false) {
+    // Create alert element
+    const alertId = 'alert-' + Date.now();
+    const alertHtml = `
+        <div id="${alertId}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${isAutoSave ? '<i class="fas fa-save me-2"></i>' : ''}
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+    
+    // Remove previous auto-save alerts if this is an auto-save notification
+    if (isAutoSave) {
+        $('.alert i.fa-save').closest('.alert').remove();
+    }
+    
+    // Add alert to the page
+    $('main').prepend(alertHtml);
+    
+    // Auto-hide alert after duration
+    if (duration > 0) {
+        setTimeout(function() {
+            $(`#${alertId}`).alert('close');
+        }, duration);
+    }
+}
+
+/**
+ * Initialize the defects section
+ */
+function initDefectsSection() {
+    // Render initial defect list
+    renderDefectList();
+    
+    // Add event listener for defect category filter
+    $('#defect-category').on('change', function() {
+        selectedCategory = parseInt($(this).val());
+        renderDefectList();
+    });
+    
+    // Add event listener for defect search
+    $('#defect-search').on('input', function() {
+        searchTerm = $(this).val().trim();
+        renderDefectList();
+    });
+    
+    // Add event listener for clear search button
+    $('#clear-defect-search').on('click', function() {
+        $('#defect-search').val('');
+        searchTerm = '';
+        renderDefectList();
+    });
+    
+    // Add event listener for lot selector
+    $('#lot-selector').on('change', function() {
+        selectedLot = parseInt($(this).val());
+    });
+    
+    // Initialize search term and category variables
+    let searchTerm = '';
+    let selectedCategory = 0;
+    
+    /**
+     * Render the list of defects based on current filters
+     */
+    function renderDefectList() {
+        // Filter defects based on search term and category
+        let filteredDefects = defectTypes;
+        
+        if (selectedCategory > 0) {
+            filteredDefects = filteredDefects.filter(d => d.categoryId === selectedCategory);
+        }
+        
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            filteredDefects = filteredDefects.filter(d => 
+                d.id.toLowerCase().includes(term) || 
+                d.name.toLowerCase().includes(term)
+            );
+        }
+        
+        // Generate HTML for defect list
+        let defectsHtml = '';
+        
+        // Group by category if showing all categories
+        if (selectedCategory === 0) {
+            const defectsByCategory = {};
+            
+            // Group defects by category
+            filteredDefects.forEach(defect => {
+                if (!defectsByCategory[defect.categoryId]) {
+                    defectsByCategory[defect.categoryId] = [];
+                }
+                defectsByCategory[defect.categoryId].push(defect);
+            });
+            
+            // Generate HTML for each category
+            defectCategories.forEach(category => {
+                const categoryDefects = defectsByCategory[category.id] || [];
+                
+                if (categoryDefects.length > 0) {
+                    defectsHtml += `<div class="col-12 mb-2"><h6 class="mt-2">${category.name}</h6></div>`;
+                    
+                    categoryDefects.forEach(defect => {
+                        const severityClass = getSeverityClass(defect.severity);
+                        defectsHtml += `
+                            <div class="col-md-6 col-lg-4 mb-2">
+                                <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn ${severityClass}" data-id="${defect.id}">
+                                    <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
+                                </button>
+                            </div>
+                        `;
+                    });
+                }
+            });
+        } else {
+            // Just list defects without categories
+            filteredDefects.forEach(defect => {
+                const severityClass = getSeverityClass(defect.severity);
+                defectsHtml += `
+                    <div class="col-md-6 col-lg-4 mb-2">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn ${severityClass}" data-id="${defect.id}">
+                            <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
+                        </button>
+                    </div>
+                `;
+            });
+        }
+        
+        // Show message if no defects found
+        if (filteredDefects.length === 0) {
+            defectsHtml = '<div class="col-12 text-center py-3"><em>ไม่พบข้อบกพร่องที่ตรงกับเงื่อนไข</em></div>';
+        }
+        
+        // Update defect list
+        $('#defect-list').html(defectsHtml);
+        
+        // Add event listeners for add defect buttons
+        $('.add-defect-btn').on('click', function() {
+            const defectId = $(this).data('id');
+            addDefect(defectId);
+        });
+    }
+    
+    /**
+     * Get CSS class for defect severity
+     * @param {string} severity Severity level
+     * @return {string} CSS class
+     */
+    function getSeverityClass(severity) {
+        switch (severity) {
+            case 'low':
+                return 'defect-low';
+            case 'medium':
+                return 'defect-medium';
+            case 'high':
+                return 'defect-high';
+            case 'critical':
+                return 'defect-critical';
+            default:
+                return '';
+        }
+    }
+}
+
+/**
+ * Handle window unload event to prevent data loss
+ * @param {Event} e Unload event
+ */
+function handleBeforeUnload(e) {
+    if (isFormDirty) {
+        const message = 'คุณมีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?';
+        e.returnValue = message;
+        return message;
+    }
+}
+
+/**
+ * Export inspection data to Excel
+ * @param {number} id Inspection ID 
+ */
+function exportToExcel(id) {
+    $('#loading-overlay').css('display', 'flex');
+    
+    $.ajax({
+        url: `api/api.php?action=get_inspection&id=${id}`,
+        type: 'GET',
+        success: function(response) {
+            try {
+                const result = typeof response === 'object' ? response : JSON.parse(response);
+                
+                if (result.status === 'success') {
+                    // Generate Excel file using SheetJS
+                    generateExcel(result.data);
+                } else {
+                    showAlert('danger', `เกิดข้อผิดพลาด: ${result.message}`, 5000);
+                }
+            } catch (e) {
+                showAlert('danger', 'เกิดข้อผิดพลาดในการส่งออกข้อมูล', 5000);
+                console.error('Export error:', e);
+            } finally {
+                $('#loading-overlay').hide();
+            }
+        },
+        error: function(xhr, status, error) {
+            $('#loading-overlay').hide();
+            showAlert('danger', `เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}`, 5000);
+        }
+    });
+}
+
+/**
+ * Generate Excel file from inspection data
+ * @param {Object} data Inspection data
+ */
+function generateExcel(data) {
+    // This would use SheetJS library to generate Excel file
+    // For demonstration purposes, we'll just show an alert
+    showAlert('info', 'ฟังก์ชันการส่งออกเป็น Excel จะถูกพัฒนาในเวอร์ชันถัดไป', 5000);
+}
+
+/**
+ * Initialize offline support features
+ */
+function initOfflineSupport() {
+    // Check if browser supports service workers
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js').then(function(registration) {
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }, function(err) {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+    }
+    
+    // Check online status initially
+    updateOnlineStatus();
+    
+    // Listen for online/offline events
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    /**
+     * Update UI based on online status
+     */
+    function updateOnlineStatus() {
+        const isOnline = navigator.onLine;
+        
+        if (isOnline) {
+            $('body').removeClass('offline-mode');
+            
+            // Try to sync any pending changes
+            if (hasPendingChanges()) {
+                syncPendingChanges();
+            }
+        } else {
+            $('body').addClass('offline-mode');
+            showAlert('warning', 'คุณกำลังทำงานในโหมดออฟไลน์ ข้อมูลจะถูกบันทึกในเครื่องชั่วคราว', 5000);
+        }
+    }
+    
+    /**
+     * Check if there are pending changes to sync
+     * @return {boolean} Whether there are pending changes
+     */
+    function hasPendingChanges() {
+        return localStorage.getItem('pendingChanges') !== null;
+    }
+    
+    /**
+     * Sync pending changes with server
+     */
+    function syncPendingChanges() {
+        const pendingChanges = JSON.parse(localStorage.getItem('pendingChanges') || '[]');
+        
+        if (pendingChanges.length === 0) return;
+        
+        showAlert('info', 'กำลังซิงค์ข้อมูลที่ค้างไว้...', 0);
+        
+        // Process each pending change
+        let processedCount = 0;
+        pendingChanges.forEach(function(change, index) {
+            $.ajax({
+                url: change.url,
+                type: change.method,
+                contentType: 'application/json',
+                data: JSON.stringify(change.data),
+                success: function() {
+                    processedCount++;
+                    
+                    // If all changes processed, clear pending changes
+                    if (processedCount === pendingChanges.length) {
+                        localStorage.removeItem('pendingChanges');
+                        showAlert('success', 'ซิงค์ข้อมูลเรียบร้อยแล้ว', 3000);
+                    }
+                },
+                error: function() {
+                    showAlert('warning', 'ไม่สามารถซิงค์ข้อมูลบางรายการได้ จะลองใหม่เมื่อมีการเชื่อมต่ออีกครั้ง', 5000);
+                }
+            });
+        });
+    }
+}
+
+/**
+ * Add a pending change to be synced later
+ * @param {string} url API endpoint URL
+ * @param {string} method HTTP method
+ * @param {Object} data Request data
+ */
+function addPendingChange(url, method, data) {
+    const pendingChanges = JSON.parse(localStorage.getItem('pendingChanges') || '[]');
+    
+    pendingChanges.push({
+        url: url,
+        method: method,
+        data: data,
+        timestamp: new Date().toISOString()
+    });
+    
+    localStorage.setItem('pendingChanges', JSON.stringify(pendingChanges));
+}
+
+// Initialize offline support
+initOfflineSupport();
+
+// Update progress bar based on form completion
+function updateProgressBar() {
+    // Get all required fields
+    const requiredFields = $('#quality-form input[required], #quality-form select[required]');
+    
+    // Count how many are filled
+    let filledCount = 0;
+    requiredFields.each(function() {
+        if ($(this).val()) {
+            filledCount++;
+        }
+    });
+    
+    // Check radio buttons
+    $('#quality-form input[type="radio"][required]').each(function() {
+        const name = $(this).attr('name');
+        if ($(`input[name="${name}"]:checked`).length > 0) {
+            filledCount++;
+        }
+    });
+    
+    // Calculate percentage
+    const totalRequired = requiredFields.length;
+    const completionPercentage = Math.round((filledCount / totalRequired) * 100);
+    
+    // Update progress bar
+    $('#progress-bar').css('width', completionPercentage + '%');
+    
+    // Update steps
+    const steps = ['general', 'lots', 'defects', 'strain', 'approval'];
+    let currentStep = 0;
+    
+    // Determine current step based on scroll position or form completion
+    const scrollPosition = $(window).scrollTop();
+    
+    for (let i = 0; i < steps.length; i++) {
+        const sectionTop = $(`.form-section:eq(${i})`).offset().top - 200;
+        if (scrollPosition >= sectionTop) {
+            currentStep = i;
+        }
+    }
+    
+    // Update step indicators
+    $('.progress-step').removeClass('step-active step-complete');
+    
+    for (let i = 0; i < steps.length; i++) {
+        if (i < currentStep) {
+            $(`.progress-step[data-step="${i+1}"]`).addClass('step-complete');
+        } else if (i === currentStep) {
+            $(`.progress-step[data-step="${i+1}"]`).addClass('step-active');
+        }
+    }
+}
+
+// Add event listener for scroll to update progress
+$(window).on('scroll', updateProgressBar);
+
+// Add event listener for form inputs to update progress
+$('#quality-form').on('change', 'input, select, textarea', updateProgressBar);
+
+// Call initially to set progress bar
+setTimeout(updateProgressBar, 500);
