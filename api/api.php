@@ -10,10 +10,31 @@ error_reporting(E_ALL);
 ini_set('log_errors', 1);
 ini_set('error_log', 'php_errors.log');
 
-// กำหนดให้สามารถรับข้อมูลได้จากทุกแหล่ง (สำหรับการทดสอบเท่านั้น ไม่แนะนำสำหรับการใช้งานจริง)
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
-header('Access-Control-Allow-Headers: Content-Type');
+// ตั้งค่า CORS ที่ปลอดภัยกว่า
+$allowedOrigins = [
+    'http://localhost',
+    'http://localhost:8080',
+    'http://127.0.0.1',
+    // เพิ่ม domain ที่ใช้จริงของคุณที่นี่
+    // 'https://yourdomain.com'
+];
+
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+
+if (in_array($origin, $allowedOrigins)) {
+    header("Access-Control-Allow-Origin: $origin");
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
+    header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+} else {
+    // ถ้าเป็น OPTIONS request (preflight) ก็ให้ผ่าน
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        header("Access-Control-Allow-Origin: $origin");
+        header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
+        header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+        exit(0);
+    }
+}
+
 header('Content-Type: application/json');
 
 // กำหนดค่าสำหรับการนำเข้าไฟล์อื่น
@@ -30,9 +51,14 @@ $requestMethod = $_SERVER['REQUEST_METHOD'];
 
 // อ่านข้อมูล JSON จาก input และจัดการกับ errors
 $jsonInput = file_get_contents('php://input');
+$data = [];
+
 if (!empty($jsonInput)) {
-    // บันทึกข้อมูล input เพื่อตรวจสอบในภายหลัง
-    error_log("API Input for action '$action': " . $jsonInput);
+    // บันทึกข้อมูล input เพื่อตรวจสอบในภายหลัง (เฉพาะ development)
+    $appEnv = getenv('APP_ENV') ?: 'development';
+    if ($appEnv === 'development') {
+        error_log("API Input for action '$action': " . $jsonInput);
+    }
     
     $data = json_decode($jsonInput, true);
     
@@ -45,8 +71,23 @@ if (!empty($jsonInput)) {
         ]);
         exit;
     }
-} else {
-    $data = [];
+}
+
+// ฟังก์ชันทำความสะอาดข้อมูลก่อนส่งกลับเพื่อป้องกัน XSS
+function sanitizeOutput($data) {
+    if (is_array($data)) {
+        foreach ($data as $key => $value) {
+            $data[$key] = sanitizeOutput($value);
+        }
+        return $data;
+    }
+    
+    // ถ้าเป็น string ให้ทำการ escape เพื่อป้องกัน XSS
+    if (is_string($data)) {
+        return htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
+    }
+    
+    return $data;
 }
 
 try {
@@ -73,7 +114,7 @@ try {
         case 'get_inspection':
             if ($requestMethod === 'GET' && isset($_GET['id'])) {
                 // ดึงข้อมูลการตรวจสอบตาม ID
-                getInspection($_GET['id']);
+                getInspection(intval($_GET['id'])); // แปลงเป็น integer เพื่อป้องกัน SQL injection
             } else {
                 echo json_encode(['status' => 'error', 'message' => 'Invalid request. ID is required.']);
             }
@@ -94,15 +135,18 @@ try {
             break;
     }
 } catch (Exception $e) {
-    error_log("API Error: " . $e->getMessage());
+    error_log("API Error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
     echo json_encode(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()]);
 }
 
 // ฟังก์ชันบันทึกข้อมูลการตรวจสอบ
 function saveInspection($data) {
     try {
-        // เพิ่ม code เพื่อบันทึก raw input data เพื่อการ debug
-        error_log("Raw input data: " . json_encode($data));
+        // บันทึก raw input data เพื่อการ debug (เฉพาะ development)
+        $appEnv = getenv('APP_ENV') ?: 'development';
+        if ($appEnv === 'development') {
+            error_log("Raw input data: " . json_encode($data));
+        }
         
         $conn = getConnection();
         
@@ -151,7 +195,7 @@ function saveInspection($data) {
         
         // ตั้งค่าค่าเริ่มต้นสำหรับข้อมูลที่อาจเป็น null
         $gaugeMark = isset($data['gaugeMark']) ? $data['gaugeMark'] : null;
-        $productionType = isset($data['productionType']) ? $data['productionType'] : 1;
+        $productionType = isset($data['productionType']) ? intval($data['productionType']) : 1;
         $rework = isset($data['rework']) ? ($data['rework'] ? 1 : 0) : 0;
         $destroy = isset($data['destroy']) ? ($data['destroy'] ? 1 : 0) : 0;
         $useJig = isset($data['useJig']) ? ($data['useJig'] ? 1 : 0) : 0;
@@ -159,48 +203,60 @@ function saveInspection($data) {
         $operation = isset($data['operation']) ? $data['operation'] : '';
         $remarks = isset($data['remarks']) ? $data['remarks'] : '';
         
+        // ทำความสะอาดข้อมูลก่อนบันทึก
+        $docPT = trim($data['docPT']);
+        $productionDate = trim($data['productionDate']);
+        $shift = trim($data['shift']);
+        $itemNumber = trim($data['itemNumber']);
+        $machineNo = trim($data['machineNo']);
+        $totalProduct = intval($data['totalProduct']);
+        $samplingDate = trim($data['samplingDate']);
+        $workOrder = trim($data['workOrder']);
+        $inspector = trim($data['inspector']);
+        $supervisor = trim($data['supervisor']);
+        
         // ใช้ดักจับความผิดพลาดที่อาจเกิดขึ้น
         try {
             $stmt->bind_param("sssssiiiiiisssssss", 
-                $data['docPT'], 
-                $data['productionDate'], 
-                $data['shift'], 
-                $data['itemNumber'], 
+                $docPT, 
+                $productionDate, 
+                $shift, 
+                $itemNumber, 
                 $gaugeMark, 
                 $productionType, 
                 $rework, 
                 $destroy, 
                 $useJig, 
                 $noJig, 
-                $data['machineNo'], 
-                $data['totalProduct'], 
-                $data['samplingDate'], 
-                $data['workOrder'], 
+                $machineNo, 
+                $totalProduct, 
+                $samplingDate, 
+                $workOrder, 
                 $operation, 
-                $data['inspector'], 
-                $data['supervisor'], 
+                $inspector, 
+                $supervisor, 
                 $remarks
             );
         } catch (Exception $e) {
             throw new Exception("Parameter binding error: " . $e->getMessage() . 
                                 "\nParameters: " . json_encode([
-                                    'docPT' => $data['docPT'],
-                                    'productionDate' => $data['productionDate'],
-                                    'shift' => $data['shift'],
-                                    'itemNumber' => $data['itemNumber'],
+                                    'docPT' => $docPT,
+                                    'productionDate' => $productionDate,
+                                    'shift' => $shift,
+                                    'itemNumber' => $itemNumber,
                                     'gaugeMark' => $gaugeMark,
                                     'productionType' => $productionType,
                                     'rework' => $rework,
                                     'destroy' => $destroy,
                                     'useJig' => $useJig,
                                     'noJig' => $noJig,
-                                    'machineNo' => $data['machineNo'],
-                                    'totalProduct' => $data['totalProduct'],
-                                    'samplingDate' => $data['samplingDate'],
-                                    'workOrder' => $data['workOrder'],
+                                    'machineNo' => $machineNo,
+                                    'totalProduct' => $totalProduct,
+                                    'samplingDate' => $samplingDate,
+                                    'workOrder' => $workOrder,
                                     'operation' => $operation,
-                                    'inspector' => $data['inspector'],
-                                    'supervisor' => $data['supervisor'],
+                                    'inspector' => $inspector,
+                                    'supervisor' => $supervisor,
                                     'remarks' => $remarks
                                 ]));
         }
@@ -229,22 +285,23 @@ function saveInspection($data) {
                 }
                 
                 // ตั้งค่าค่าเริ่มต้นสำหรับข้อมูลที่อาจเป็น null
-                $piecesPerLot = isset($lot['piecesPerLot']) ? $lot['piecesPerLot'] : 0;
-                $description = isset($lot['description']) ? $lot['description'] : '';
-                $palletNo = isset($lot['palletNo']) ? $lot['palletNo'] : '';
+                $lotNumber = trim($lot['lotNumber']);
+                $piecesPerLot = isset($lot['piecesPerLot']) ? intval($lot['piecesPerLot']) : 0;
+                $description = isset($lot['description']) ? trim($lot['description']) : '';
+                $palletNo = isset($lot['palletNo']) ? trim($lot['palletNo']) : '';
                 $strainStd = isset($lot['strainStd']) ? $lot['strainStd'] : null;
-                $firstSampleSize = isset($lot['firstSampleSize']) ? $lot['firstSampleSize'] : null;
-                $firstSampleAcRe = isset($lot['firstSampleAcRe']) ? $lot['firstSampleAcRe'] : '';
-                $secondSampleSize = isset($lot['secondSampleSize']) ? $lot['secondSampleSize'] : null;
-                $secondSampleAcRe = isset($lot['secondSampleAcRe']) ? $lot['secondSampleAcRe'] : '';
-                $result = isset($lot['result']) ? $lot['result'] : '';
-                $qp = isset($lot['qp']) ? $lot['qp'] : '';
-                $strainResult = isset($lot['strainResult']) ? $lot['strainResult'] : '';
+                $firstSampleSize = isset($lot['firstSampleSize']) ? intval($lot['firstSampleSize']) : null;
+                $firstSampleAcRe = isset($lot['firstSampleAcRe']) ? trim($lot['firstSampleAcRe']) : '';
+                $secondSampleSize = isset($lot['secondSampleSize']) ? intval($lot['secondSampleSize']) : null;
+                $secondSampleAcRe = isset($lot['secondSampleAcRe']) ? trim($lot['secondSampleAcRe']) : '';
+                $result = isset($lot['result']) ? trim($lot['result']) : '';
+                $qp = isset($lot['qp']) ? trim($lot['qp']) : '';
+                $strainResult = isset($lot['strainResult']) ? trim($lot['strainResult']) : '';
                 
                 try {
                     $stmt->bind_param("isissdisissss", 
                         $inspectionId, 
-                        $lot['lotNumber'], 
+                        $lotNumber, 
                         $piecesPerLot, 
                         $description, 
                         $palletNo, 
@@ -285,7 +342,7 @@ function saveInspection($data) {
                 }
                 
                 $lotId = $lotIds[$lotKey];
-                $count = isset($defect['count']) ? $defect['count'] : 0;
+                $count = isset($defect['count']) ? intval($defect['count']) : 0;
                 
                 // ข้ามถ้าไม่มีข้อบกพร่อง
                 if ($count <= 0) {
@@ -299,10 +356,13 @@ function saveInspection($data) {
                     throw new Exception("Prepare defect statement failed: " . $conn->error);
                 }
                 
+                // ทำความสะอาดข้อมูล
+                $defectCode = trim($defect['defectCode']);
+                
                 try {
                     $stmt->bind_param("isi", 
                         $lotId, 
-                        $defect['defectCode'], 
+                        $defectCode, 
                         $count
                     );
                 } catch (Exception $e) {
@@ -332,6 +392,8 @@ function saveInspection($data) {
                 }
                 
                 $lotId = $lotIds[$lotKey];
+                $position = intval($measurement['position']);
+                $value = floatval($measurement['value']);
                 
                 $stmt = $conn->prepare("INSERT INTO strain_measurements (lot_id, position, value) 
                                         VALUES (?, ?, ?)");
@@ -343,8 +405,8 @@ function saveInspection($data) {
                 try {
                     $stmt->bind_param("iid", 
                         $lotId, 
-                        $measurement['position'], 
-                        $measurement['value']
+                        $position, 
+                        $value
                     );
                 } catch (Exception $e) {
                     throw new Exception("Strain measurement parameter binding error: " . $e->getMessage() . 
@@ -370,7 +432,7 @@ function saveInspection($data) {
         }
         
         // บันทึกข้อผิดพลาดไว้ในล็อก
-        error_log("Save inspection error: " . $e->getMessage());
+        error_log("Save inspection error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
         
         // ส่งข้อความ error กลับ
         echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
@@ -395,77 +457,73 @@ function getInspections() {
         $item = isset($_GET['item']) ? $_GET['item'] : null;
         $limit = isset($_GET['limit']) ? intval($_GET['limit']) : 1000; // จำกัดจำนวนรายการที่ดึง
         
-        // สร้างคำสั่ง SQL พื้นฐาน
-        $sql = "SELECT i.*, 
-                (SELECT result FROM inspection_lots WHERE inspection_id = i.id LIMIT 1) as result 
-                FROM inspections i WHERE 1=1";
+        // สร้างคำสั่ง SQL พื้นฐาน - ใช้ join แทน subquery เพื่อประสิทธิภาพ
+        $sql = "SELECT i.*, il.result
+                FROM inspections i
+                LEFT JOIN (
+                    SELECT DISTINCT inspection_id, result
+                    FROM inspection_lots
+                ) il ON i.id = il.inspection_id
+                WHERE 1=1";
         
         // เพิ่มเงื่อนไขการกรอง
+        $params = [];
+        $types = "";
+        
         if ($startDate && $endDate) {
             $sql .= " AND i.production_date BETWEEN ? AND ?";
+            $types .= "ss";
+            $params[] = $startDate;
+            $params[] = $endDate;
         }
         
         if ($shift) {
             $sql .= " AND i.shift = ?";
+            $types .= "s";
+            $params[] = $shift;
         }
         
         if ($machine) {
             $sql .= " AND i.machine_no = ?";
+            $types .= "s";
+            $params[] = $machine;
         }
         
         if ($item) {
             $sql .= " AND i.item_number LIKE ?";
+            $types .= "s";
+            $params[] = "%$item%";
         }
         
         // เพิ่มการเรียงลำดับและจำกัดจำนวน
         $sql .= " ORDER BY i.created_at DESC LIMIT ?";
+        $types .= "i";
+        $params[] = $limit;
         
         // เตรียมคำสั่ง SQL
         $stmt = $conn->prepare($sql);
         
+        if (!$stmt) {
+            throw new Exception("Prepare statement failed: " . $conn->error);
+        }
+        
         // ผูกพารามิเตอร์
-        $bindTypes = "";
-        $bindParams = [];
-        
-        if ($startDate && $endDate) {
-            $bindTypes .= "ss";
-            $bindParams[] = $startDate;
-            $bindParams[] = $endDate;
-        }
-        
-        if ($shift) {
-            $bindTypes .= "s";
-            $bindParams[] = $shift;
-        }
-        
-        if ($machine) {
-            $bindTypes .= "s";
-            $bindParams[] = $machine;
-        }
-        
-        if ($item) {
-            $bindTypes .= "s";
-            $bindParams[] = "%$item%";
-        }
-        
-        // เพิ่มพารามิเตอร์ limit
-        $bindTypes .= "i";
-        $bindParams[] = $limit;
-        
-        // ผูกพารามิเตอร์ถ้ามี
-        if (!empty($bindParams)) {
-            $bindParamsRef = [];
-            $bindParamsRef[] = &$bindTypes;
+        if (!empty($params)) {
+            $bindParams = [];
+            $bindParams[] = &$types;
             
-            foreach ($bindParams as $key => $value) {
-                $bindParamsRef[] = &$bindParams[$key];
+            foreach ($params as $key => $value) {
+                $bindParams[] = &$params[$key];
             }
             
-            call_user_func_array([$stmt, 'bind_param'], $bindParamsRef);
+            call_user_func_array([$stmt, 'bind_param'], $bindParams);
         }
         
         // ดำเนินการคำสั่ง
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            throw new Exception("Execute statement failed: " . $stmt->error);
+        }
+        
         $result = $stmt->get_result();
         
         $inspections = [];
@@ -475,10 +533,11 @@ function getInspections() {
             }
         }
         
-        // ส่งข้อมูลกลับในรูปแบบ JSON
-        echo json_encode(['status' => 'success', 'data' => $inspections]);
+        // ส่งข้อมูลกลับในรูปแบบ JSON พร้อมทำความสะอาดข้อมูล
+        echo json_encode(['status' => 'success', 'data' => sanitizeOutput($inspections)]);
         
     } catch (Exception $e) {
+        error_log("Get inspections error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
         echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
     } finally {
         // ปิดการเชื่อมต่อ
@@ -493,7 +552,7 @@ function getInspection($id) {
     try {
         $conn = getConnection();
         
-        // แปลง $id เป็นตัวเลข
+        // แปลง $id เป็นตัวเลข (ต้องแปลงแล้วจากตัวเรียกฟังก์ชัน)
         $id = intval($id);
         
         // 1. ดึงข้อมูลหลักของการตรวจสอบ
@@ -581,10 +640,11 @@ function getInspection($id) {
         // เพิ่มข้อมูลล็อตเข้าไปในข้อมูลการตรวจสอบ
         $inspection['lots'] = $lots;
         
-        // ส่งข้อมูลกลับในรูปแบบ JSON
-        echo json_encode(['status' => 'success', 'data' => $inspection]);
+        // ส่งข้อมูลกลับในรูปแบบ JSON พร้อมทำความสะอาดข้อมูล
+        echo json_encode(['status' => 'success', 'data' => sanitizeOutput($inspection)]);
         
     } catch (Exception $e) {
+        error_log("Get inspection error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
         echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
     } finally {
         // ปิดการเชื่อมต่อ
@@ -696,10 +756,11 @@ function getSummaryData() {
             }
         }
         
-        // ส่งข้อมูลกลับในรูปแบบ JSON
-        echo json_encode(['status' => 'success', 'data' => $summary]);
+        // ส่งข้อมูลกลับในรูปแบบ JSON พร้อมทำความสะอาดข้อมูล
+        echo json_encode(['status' => 'success', 'data' => sanitizeOutput($summary)]);
         
     } catch (Exception $e) {
+        error_log("Get summary error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
         echo json_encode(['status' => 'error', 'message' => 'เกิดข้อผิดพลาด: ' . $e->getMessage()]);
     } finally {
         // ปิดการเชื่อมต่อ
@@ -708,3 +769,4 @@ function getSummaryData() {
         }
     }
 }
+?>
