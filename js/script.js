@@ -14,41 +14,541 @@ const defectCategories = [
 // ปรับปรุงรายการข้อบกพร่อง - ใช้รูปแบบ ID ที่สอดคล้องกัน
 const defectTypes = [
     // กลุ่มข้อบกพร่องที่ผิว (Surface Defects)
-    { id: 'D1019', name: 'Dirty body', categoryId: 1 },
-    { id: 'D1052', name: 'Scratch', categoryId: 1 },
-    { id: 'D1001', name: 'Blister on surface', categoryId: 1 },
-    { id: 'D1002', name: 'Stone', categoryId: 1 },
-    { id: 'D1003', name: 'Check', categoryId: 1 },
-    { id: 'D1004', name: 'Crack', categoryId: 1 },
+    { id: 'D1019', name: 'Dirty body', categoryId: 1, severity: 'low' },
+    { id: 'D1052', name: 'Scratch', categoryId: 1, severity: 'medium' },
+    { id: 'D1001', name: 'Blister on surface', categoryId: 1, severity: 'medium' },
+    { id: 'D1002', name: 'Stone', categoryId: 1, severity: 'high' },
+    { id: 'D1003', name: 'Check', categoryId: 1, severity: 'high' },
+    { id: 'D1004', name: 'Crack', categoryId: 1, severity: 'critical' },
     
     // กลุ่มข้อบกพร่องรูปทรง (Shape Defects)
-    { id: 'D2047', name: 'Rocker bottom', categoryId: 2 },
-    { id: 'D2012', name: 'Distorted', categoryId: 2 },
-    { id: 'D2015', name: 'Thin bottom', categoryId: 2 },
-    { id: 'D2001', name: 'Uneven rim', categoryId: 2 },
-    { id: 'D2002', name: 'Warped', categoryId: 2 },
+    { id: 'D2047', name: 'Rocker bottom', categoryId: 2, severity: 'high' },
+    { id: 'D2012', name: 'Distorted', categoryId: 2, severity: 'medium' },
+    { id: 'D2015', name: 'Thin bottom', categoryId: 2, severity: 'high' },
+    { id: 'D2001', name: 'Uneven rim', categoryId: 2, severity: 'medium' },
+    { id: 'D2002', name: 'Warped', categoryId: 2, severity: 'medium' },
     
     // กลุ่มข้อบกพร่องจากการผลิต (Manufacturing Defects)
-    { id: 'D3106', name: 'Wrong Joint', categoryId: 3 },
-    { id: 'D3024', name: 'Blister', categoryId: 3 },
-    { id: 'D3001', name: 'Cold Mark', categoryId: 3 },
-    { id: 'D3002', name: 'Cold Glass', categoryId: 3 },
-    { id: 'D3003', name: 'Fold', categoryId: 3 },
-    { id: 'D3004', name: 'Glass Blob', categoryId: 3 },
+    { id: 'D3106', name: 'Wrong Joint', categoryId: 3, severity: 'high' },
+    { id: 'D3024', name: 'Blister', categoryId: 3, severity: 'medium' },
+    { id: 'D3001', name: 'Cold Mark', categoryId: 3, severity: 'low' },
+    { id: 'D3002', name: 'Cold Glass', categoryId: 3, severity: 'medium' },
+    { id: 'D3003', name: 'Fold', categoryId: 3, severity: 'medium' },
+    { id: 'D3004', name: 'Glass Blob', categoryId: 3, severity: 'high' },
     
     // กลุ่มข้อบกพร่องอื่นๆ (Others)
-    { id: 'D4099', name: 'Others', categoryId: 4 }
+    { id: 'D4099', name: 'Others', categoryId: 4, severity: 'medium' }
 ];
 
 // ตัวแปรสำหรับเก็บข้อบกพร่องที่เลือก
 let activeDefects = [];
 let selectedLot = 1;
+let formVersion = 1; // เพิ่มตัวแปรสำหรับ optimistic locking
+let autoSaveInterval; // ตัวแปรสำหรับเก็บ interval ของการบันทึกอัตโนมัติ
+let isMobile = window.innerWidth < 768; // ตรวจสอบว่าเป็นโหมดมือถือหรือไม่
+let isFormDirty = false; // ตัวแปรติดตามการเปลี่ยนแปลงแบบฟอร์ม
+let lastSaveTime = null; // เวลาที่บันทึกล่าสุด
+let isSubmitting = false; // ป้องกันการส่งซ้ำ
+
+// คีย์สำหรับ localStorage
+const FORM_STATE_KEY = 'oceanGlassQA_formState';
+const FORM_TIMESTAMP_KEY = 'oceanGlassQA_formTimestamp';
+const FORM_VERSION_KEY = 'oceanGlassQA_formVersion';
+const CSRF_TOKEN_KEY = 'oceanGlassQA_csrfToken';
 
 // เมื่อเอกสารโหลดเสร็จ
 $(document).ready(function() {
-    // เรียกฟังก์ชันเพื่อแสดงแบบฟอร์ม
-    displayQAForm();
+    // เพิ่ม CSRF token ลงในทุก AJAX request
+    setupAjaxCSRF();
+    
+    // ตรวจสอบ URL สำหรับพารามิเตอร์ ID (ถ้ามี)
+    const urlParams = new URLSearchParams(window.location.search);
+    const inspectionId = urlParams.get('id');
+    
+    // หากมี ID ให้โหลดข้อมูลที่มีอยู่
+    if (inspectionId) {
+        loadExistingInspection(inspectionId);
+    } else {
+        // ตรวจสอบว่ามีข้อมูลที่บันทึกไว้ใน localStorage หรือไม่
+        checkForSavedFormState();
+        
+        // เรียกฟังก์ชันเพื่อแสดงแบบฟอร์ม
+        displayQAForm();
+    }
+    
+    // เพิ่ม event listener สำหรับการเปลี่ยนแปลงขนาดหน้าจอ
+    $(window).on('resize', handleResize);
+    
+    // เพิ่ม event listener สำหรับการออกจากหน้า
+    window.addEventListener('beforeunload', handlePageUnload);
+    
+    // เพิ่ม event listener สำหรับการเชื่อมต่อออฟไลน์/ออนไลน์
+    window.addEventListener('online', handleOnlineStatus);
+    window.addEventListener('offline', handleOfflineStatus);
 });
+
+/**
+ * ตั้งค่า CSRF token สำหรับ AJAX requests
+ */
+function setupAjaxCSRF() {
+    // รับ CSRF token จาก localStorage หรือสร้างใหม่ถ้าไม่มี
+    let csrfToken = localStorage.getItem(CSRF_TOKEN_KEY);
+    if (!csrfToken) {
+        csrfToken = generateCSRFToken();
+        localStorage.setItem(CSRF_TOKEN_KEY, csrfToken);
+    }
+    
+    // เพิ่ม CSRF token ในทุก AJAX request
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': csrfToken
+        },
+        beforeSend: function(xhr) {
+            xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+        }
+    });
+}
+
+/**
+ * สร้าง CSRF token แบบง่าย (ในการใช้งานจริงควรรับจาก server)
+ */
+function generateCSRFToken() {
+    return Math.random().toString(36).substring(2, 15) + 
+           Math.random().toString(36).substring(2, 15);
+}
+
+/**
+ * ตรวจสอบว่ามีข้อมูลที่บันทึกไว้ใน localStorage หรือไม่
+ */
+function checkForSavedFormState() {
+    const savedState = localStorage.getItem(FORM_STATE_KEY);
+    const savedTimestamp = localStorage.getItem(FORM_TIMESTAMP_KEY);
+    
+    if (savedState && savedTimestamp) {
+        const now = new Date();
+        const savedTime = new Date(savedTimestamp);
+        const hoursDiff = (now - savedTime) / (1000 * 60 * 60);
+        
+        // ถ้าข้อมูลที่บันทึกไว้ไม่เกิน 24 ชั่วโมง ให้ถามผู้ใช้ว่าต้องการกู้คืนหรือไม่
+        if (hoursDiff < 24) {
+            const formattedTime = savedTime.toLocaleString('th-TH');
+            
+            const restoreDialog = $(`
+                <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+                    <strong><i class="fas fa-save"></i> พบข้อมูลที่บันทึกไว้ล่าสุดเมื่อ ${formattedTime}</strong>
+                    <p>คุณต้องการกู้คืนข้อมูลที่บันทึกไว้ล่าสุดหรือไม่?</p>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-primary btn-sm restore-btn">
+                            <i class="fas fa-undo"></i> กู้คืนข้อมูล
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm ms-2 discard-btn">
+                            <i class="fas fa-trash"></i> ใช้แบบฟอร์มใหม่
+                        </button>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            `);
+            
+            restoreDialog.find('.restore-btn').on('click', function() {
+                restoreFormState();
+                restoreDialog.alert('close');
+            });
+            
+            restoreDialog.find('.discard-btn').on('click', function() {
+                clearSavedFormState();
+                restoreDialog.alert('close');
+            });
+            
+            $('#qa-form').prepend(restoreDialog);
+        }
+    }
+}
+
+/**
+ * กู้คืนข้อมูลแบบฟอร์มจาก localStorage
+ */
+function restoreFormState() {
+    try {
+        const savedState = localStorage.getItem(FORM_STATE_KEY);
+        if (!savedState) return;
+        
+        const formData = JSON.parse(savedState);
+        formVersion = parseInt(localStorage.getItem(FORM_VERSION_KEY) || '1');
+        
+        // คืนค่าข้อมูลทั่วไป
+        for (const [key, value] of Object.entries(formData.general || {})) {
+            const field = $('#' + key);
+            if (field.length) {
+                if (field.is(':checkbox')) {
+                    field.prop('checked', value);
+                } else if (field.is(':radio')) {
+                    $(`input[name="${field.attr('name')}"][value="${value}"]`).prop('checked', true);
+                } else {
+                    field.val(value);
+                }
+            }
+        }
+        
+        // คืนค่าข้อมูลล็อต
+        if (formData.lots) {
+            for (let i = 0; i < formData.lots.length; i++) {
+                const lot = formData.lots[i];
+                const lotNumber = i + 1;
+                
+                for (const [key, value] of Object.entries(lot)) {
+                    const field = $(`#${key}-${lotNumber}`);
+                    if (field.length) {
+                        if (field.is(':checkbox')) {
+                            field.prop('checked', value);
+                        } else if (field.is(':radio')) {
+                            $(`input[name="${field.attr('name')}"][value="${value}"]`).prop('checked', true);
+                        } else {
+                            field.val(value);
+                        }
+                    }
+                }
+                
+                // คืนค่าผลการตรวจสอบ
+                if (lot.result) {
+                    $(`input[name="result-${lotNumber}"][value="${lot.result}"]`).prop('checked', true);
+                }
+                
+                // คืนค่าผลการวัดความเครียด
+                if (lot.strainResult) {
+                    $(`input[name="strain-result-${lotNumber}"][value="${lot.strainResult}"]`).prop('checked', true);
+                }
+            }
+        }
+        
+        // คืนค่าข้อมูลข้อบกพร่อง
+        if (formData.defects) {
+            activeDefects = formData.defects;
+            renderActiveDefects();
+        }
+        
+        // คืนค่าข้อมูลการวัดความเครียด
+        if (formData.strainMeasurements) {
+            for (const measurement of formData.strainMeasurements) {
+                $(`.strain-input[data-lot="${measurement.lot}"][data-position="${measurement.position}"]`).val(measurement.value);
+            }
+        }
+        
+        // คืนค่าข้อมูลการอนุมัติ
+        if (formData.approval) {
+            for (const [key, value] of Object.entries(formData.approval)) {
+                const field = $('#' + key);
+                if (field.length) {
+                    field.val(value);
+                }
+            }
+        }
+        
+        showAlert('success', 'กู้คืนข้อมูลเรียบร้อยแล้ว', 3000);
+        isFormDirty = false; // รีเซ็ตสถานะการเปลี่ยนแปลง
+    } catch (e) {
+        console.error('Error restoring form state:', e);
+        showAlert('danger', 'เกิดข้อผิดพลาดในการกู้คืนข้อมูล: ' + e.message, 5000);
+        clearSavedFormState(); // ล้างข้อมูลที่อาจเสียหาย
+    }
+}
+
+/**
+ * บันทึกสถานะแบบฟอร์มไปยัง localStorage
+ */
+function saveFormState() {
+    try {
+        if (!isFormDirty) return; // ไม่บันทึกถ้าไม่มีการเปลี่ยนแปลง
+        
+        const formData = {
+            general: {
+                'doc-pt': $('#doc-pt').val(),
+                'production-date': $('#production-date').val(),
+                'shift': $('input[name="shift"]:checked').val(),
+                'item-number': $('#item-number').val(),
+                'gauge-mark': $('#gauge-mark').val(),
+                'production-type': $('input[name="production-type"]:checked').val(),
+                'use-jig': $('#use-jig').is(':checked'),
+                'no-jig': $('#no-jig').is(':checked'),
+                'machine-no': $('#machine-no').val(),
+                'total-product': $('#total-product').val(),
+                'sampling-date': $('#sampling-date').val(),
+                'work-order': $('#work-order').val(),
+                'operation': $('#operation').val()
+            },
+            lots: [],
+            defects: activeDefects,
+            strainMeasurements: [],
+            approval: {
+                'inspector': $('#inspector').val(),
+                'supervisor': $('#supervisor').val(),
+                'remarks': $('#remarks').val()
+            }
+        };
+        
+        // เก็บข้อมูลล็อต
+        for (let i = 1; i <= 4; i++) {
+            const lotData = {
+                'lot-number': $(`#lot-number-${i}`).val(),
+                'pieces-per-lot': $(`#pieces-per-lot-${i}`).val(),
+                'description': $(`#description-${i}`).val(),
+                'pallet-no': $(`#pallet-no-${i}`).val(),
+                'strain-std': $(`#strain-std-${i}`).val(),
+                'first-sample-size': $(`#first-sample-size-${i}`).val(),
+                'first-sample-ac-re': $(`#first-sample-ac-re-${i}`).val(),
+                'second-sample-size': $(`#second-sample-size-${i}`).val(),
+                'second-sample-ac-re': $(`#second-sample-ac-re-${i}`).val(),
+                'qp': $(`#qp-${i}`).val(),
+                'result': $(`input[name="result-${i}"]:checked`).val(),
+                'strainResult': $(`input[name="strain-result-${i}"]:checked`).val()
+            };
+            
+            formData.lots.push(lotData);
+        }
+        
+        // เก็บข้อมูลการวัดความเครียด
+        $('.strain-input').each(function() {
+            const value = $(this).val();
+            if (value) {
+                formData.strainMeasurements.push({
+                    lot: $(this).data('lot'),
+                    position: $(this).data('position'),
+                    value: value
+                });
+            }
+        });
+        
+        // บันทึกข้อมูลลง localStorage
+        localStorage.setItem(FORM_STATE_KEY, JSON.stringify(formData));
+        localStorage.setItem(FORM_TIMESTAMP_KEY, new Date().toISOString());
+        localStorage.setItem(FORM_VERSION_KEY, formVersion.toString());
+        
+        lastSaveTime = new Date();
+        isFormDirty = false;
+        
+        console.log('Form state saved to localStorage at', lastSaveTime);
+    } catch (e) {
+        console.error('Error saving form state:', e);
+    }
+}
+
+/**
+ * ล้างข้อมูลที่บันทึกไว้ใน localStorage
+ */
+function clearSavedFormState() {
+    localStorage.removeItem(FORM_STATE_KEY);
+    localStorage.removeItem(FORM_TIMESTAMP_KEY);
+    localStorage.removeItem(FORM_VERSION_KEY);
+    console.log('Saved form state cleared');
+}
+
+/**
+ * จัดการเมื่อขนาดหน้าจอเปลี่ยน
+ */
+function handleResize() {
+    const wasInMobileMode = isMobile;
+    isMobile = window.innerWidth < 768;
+    
+    // ถ้ามีการเปลี่ยนแปลงโหมด (มือถือ/เดสก์ท็อป)
+    if (wasInMobileMode !== isMobile) {
+        // ปรับการแสดงผลตามขนาดหน้าจอ
+        adjustLayoutForScreenSize();
+    }
+}
+
+/**
+ * ปรับการแสดงผลตามขนาดหน้าจอ
+ */
+function adjustLayoutForScreenSize() {
+    if (isMobile) {
+        // ปรับสำหรับมือถือ
+        $('.table-responsive').addClass('mobile-enhanced');
+        $('.defect-list-container').addClass('mobile-scrollable');
+        $('.form-section').addClass('mobile-compact');
+    } else {
+        // ปรับสำหรับเดสก์ท็อป
+        $('.table-responsive').removeClass('mobile-enhanced');
+        $('.defect-list-container').removeClass('mobile-scrollable');
+        $('.form-section').removeClass('mobile-compact');
+    }
+}
+
+/**
+ * จัดการเมื่อออกจากหน้า
+ * @param {Event} e เหตุการณ์
+ */
+function handlePageUnload(e) {
+    if (isFormDirty) {
+        // บันทึกก่อนออกจากหน้า
+        saveFormState();
+        
+        // แสดงข้อความเตือน (ไม่รองรับในทุกเบราว์เซอร์)
+        const message = 'คุณมีข้อมูลที่ยังไม่ได้บันทึก ต้องการออกจากหน้านี้หรือไม่?';
+        e.returnValue = message;
+        return message;
+    }
+}
+
+/**
+ * จัดการเมื่อกลับมาออนไลน์
+ */
+function handleOnlineStatus() {
+    showAlert('success', 'กลับมาออนไลน์แล้ว คุณสามารถบันทึกข้อมูลได้ตามปกติ', 3000);
+    
+    // ลองส่งข้อมูลที่ค้างอยู่ถ้ามี
+    if (isSubmitting) {
+        saveFormData();
+    }
+}
+
+/**
+ * จัดการเมื่อออฟไลน์
+ */
+function handleOfflineStatus() {
+    showAlert('warning', 'คุณกำลังออฟไลน์ ข้อมูลจะถูกบันทึกในเครื่องชั่วคราว', 5000);
+}
+
+/**
+ * โหลดข้อมูลการตรวจสอบที่มีอยู่แล้ว
+ * @param {string} id รหัสการตรวจสอบ
+ */
+function loadExistingInspection(id) {
+    $('#loading-overlay').css('display', 'flex');
+    
+    $.ajax({
+        url: `api/api.php?action=get_inspection&id=${id}`,
+        type: 'GET',
+        timeout: 30000, // 30 วินาที
+        success: function(response) {
+            try {
+                const result = typeof response === 'object' ? response : JSON.parse(response);
+                
+                if (result.status === 'success') {
+                    // แสดงแบบฟอร์ม
+                    displayQAForm();
+                    
+                    // ตั้งค่า version สำหรับ optimistic locking
+                    formVersion = result.data.version || 1;
+                    
+                    // นำข้อมูลมาแสดงในแบบฟอร์ม
+                    populateFormWithData(result.data);
+                    
+                    showAlert('info', 'โหลดข้อมูลเรียบร้อยแล้ว คุณสามารถแก้ไขและบันทึกได้', 3000);
+                } else {
+                    showAlert('danger', `เกิดข้อผิดพลาด: ${result.message}`, 5000);
+                }
+            } catch (e) {
+                console.error('Error parsing response:', e, response);
+                showAlert('danger', 'เกิดข้อผิดพลาดในการรับข้อมูล', 5000);
+            } finally {
+                $('#loading-overlay').hide();
+            }
+        },
+        error: function(xhr, status, error) {
+            $('#loading-overlay').hide();
+            
+            if (status === 'timeout') {
+                showAlert('danger', 'การเชื่อมต่อหมดเวลา กรุณาลองใหม่อีกครั้ง', 5000);
+            } else {
+                showAlert('danger', `เกิดข้อผิดพลาดในการโหลดข้อมูล: ${error}`, 5000);
+            }
+            
+            console.error('AJAX Error:', status, error, xhr.responseText);
+            
+            // แสดงแบบฟอร์มเปล่า
+            displayQAForm();
+        }
+    });
+}
+
+/**
+ * นำข้อมูลการตรวจสอบมาแสดงในแบบฟอร์ม
+ * @param {Object} data ข้อมูลการตรวจสอบ
+ */
+function populateFormWithData(data) {
+    // ข้อมูลทั่วไป
+    $('#doc-pt').val(data.doc_pt);
+    $('#production-date').val(data.production_date);
+    $(`input[name="shift"][value="${data.shift}"]`).prop('checked', true);
+    $('#item-number').val(data.item_number);
+    $('#gauge-mark').val(data.gauge_mark);
+    $(`input[name="production-type"][value="${data.production_type}"]`).prop('checked', true);
+    $('#use-jig').prop('checked', data.use_jig == 1);
+    $('#no-jig').prop('checked', data.no_jig == 1);
+    $('#machine-no').val(data.machine_no);
+    $('#total-product').val(data.total_product);
+    $('#sampling-date').val(data.sampling_date);
+    $('#work-order').val(data.work_order);
+    $('#operation').val(data.operation);
+    
+    // ข้อมูลล็อต
+    if (data.lots && data.lots.length > 0) {
+        data.lots.forEach((lot, index) => {
+            const lotNumber = index + 1;
+            
+            $(`#lot-number-${lotNumber}`).val(lot.lot_number);
+            $(`#pieces-per-lot-${lotNumber}`).val(lot.pieces_per_lot);
+            $(`#description-${lotNumber}`).val(lot.description);
+            $(`#pallet-no-${lotNumber}`).val(lot.pallet_no);
+            $(`#strain-std-${lotNumber}`).val(lot.strain_std);
+            $(`#first-sample-size-${lotNumber}`).val(lot.first_sample_size);
+            $(`#first-sample-ac-re-${lotNumber}`).val(lot.first_sample_ac_re);
+            $(`#second-sample-size-${lotNumber}`).val(lot.second_sample_size);
+            $(`#second-sample-ac-re-${lotNumber}`).val(lot.second_sample_ac_re);
+            $(`#qp-${lotNumber}`).val(lot.qp);
+            
+            // ตั้งค่าผลการตรวจสอบ
+            if (lot.result) {
+                $(`input[name="result-${lotNumber}"][value="${lot.result}"]`).prop('checked', true);
+            }
+            
+            // ตั้งค่าผลการวัดความเครียด
+            if (lot.strain_result) {
+                $(`input[name="strain-result-${lotNumber}"][value="${lot.strain_result}"]`).prop('checked', true);
+            }
+            
+            // ตั้งค่าข้อบกพร่อง
+            if (lot.defects && lot.defects.length > 0) {
+                lot.defects.forEach(defect => {
+                    const defectType = defectTypes.find(d => d.id === defect.defect_code);
+                    if (defectType) {
+                        // ตรวจสอบว่ามีข้อบกพร่องนี้ใน activeDefects แล้วหรือไม่
+                        const existingDefect = activeDefects.find(d => d.id === defect.defect_code);
+                        if (existingDefect) {
+                            // อัพเดทจำนวน
+                            existingDefect.counts[lotNumber] = parseInt(defect.defect_count) || 0;
+                        } else {
+                            // เพิ่มข้อบกพร่องใหม่
+                            const newDefect = {
+                                ...defectType,
+                                counts: { 1: 0, 2: 0, 3: 0, 4: 0 }
+                            };
+                            newDefect.counts[lotNumber] = parseInt(defect.defect_count) || 0;
+                            activeDefects.push(newDefect);
+                        }
+                    }
+                });
+            }
+            
+            // ตั้งค่าการวัดความเครียด
+            if (lot.strainMeasurements && lot.strainMeasurements.length > 0) {
+                lot.strainMeasurements.forEach(measurement => {
+                    $(`.strain-input[data-lot="${lotNumber}"][data-position="${measurement.position}"]`).val(measurement.value);
+                });
+            }
+        });
+    }
+    
+    // อัพเดทตารางข้อบกพร่อง
+    renderActiveDefects();
+    
+    // ข้อมูลการอนุมัติ
+    $('#inspector').val(data.inspector);
+    $('#supervisor').val(data.supervisor);
+    $('#remarks').val(data.remarks);
+    
+    // รีเซ็ตสถานะของฟอร์ม
+    isFormDirty = false;
+}
 
 // ฟังก์ชันแสดงแบบฟอร์ม QA
 function displayQAForm() {
@@ -60,10 +560,37 @@ function displayQAForm() {
     
     // เพิ่ม event listeners สำหรับฟังก์ชันต่างๆ ในฟอร์ม
     addFormEventListeners();
+    
+    // ปรับการแสดงผลตามขนาดหน้าจอ
+    adjustLayoutForScreenSize();
+    
+    // เริ่มบันทึกอัตโนมัติทุก 30 วินาที
+    startAutoSave();
+}
+
+// ฟังก์ชันเริ่มบันทึกอัตโนมัติ
+function startAutoSave() {
+    // ยกเลิก interval เดิมถ้ามี
+    if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+    }
+    
+    // ตั้งค่าบันทึกอัตโนมัติทุก 30 วินาที
+    autoSaveInterval = setInterval(function() {
+        if (isFormDirty) {
+            saveFormState();
+            
+            // แสดงข้อความแจ้งเตือนการบันทึกอัตโนมัติเฉพาะครั้งแรก
+            if (!lastSaveTime || new Date() - lastSaveTime > 60000) {
+                showAlert('info', 'บันทึกข้อมูลอัตโนมัติเรียบร้อยแล้ว', 2000, true);
+            }
+        }
+    }, 30000);
 }
 
 // ฟังก์ชันสร้าง HTML สำหรับแบบฟอร์ม QA
 function createQAFormHTML() {
+    // HTML code คงเดิมเหมือนในโค้ดเดิม แต่จะเพิ่มข้อมูลเกี่ยวกับ version
     return `
         <h2 class="mb-3">QA QUALITY DATA 1</h2>
         <form id="quality-form">
@@ -524,10 +1051,26 @@ function createQAFormHTML() {
                 <ul id="error-list"></ul>
             </div>
             
+            <!-- แสดงข้อความการบันทึกล่าสุด -->
+            <div id="last-save-info" class="alert alert-info mt-3" style="display: none;">
+                <small>บันทึกล่าสุดเมื่อ: <span id="last-save-time"></span></small>
+            </div>
+            
+            <!-- ฟิลด์ซ่อนสำหรับ CSRF token และ version -->
+            <input type="hidden" id="form-version" value="${formVersion}">
+            <input type="hidden" id="csrf-token" value="${localStorage.getItem(CSRF_TOKEN_KEY) || ''}">
+            
             <!-- ปุ่มบันทึก -->
             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                <button type="button" class="btn btn-secondary me-md-2" id="clear-form">ล้างฟอร์ม</button>
-                <button type="submit" class="btn btn-primary">บันทึกข้อมูล</button>
+                <button type="button" class="btn btn-outline-primary me-md-2" id="save-draft-btn">
+                    <i class="fas fa-save"></i> บันทึกฉบับร่าง
+                </button>
+                <button type="button" class="btn btn-secondary me-md-2" id="clear-form">
+                    <i class="fas fa-eraser"></i> ล้างฟอร์ม
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-check-circle"></i> บันทึกข้อมูล
+                </button>
             </div>
         </form>
     `;
@@ -543,9 +1086,28 @@ function addFormEventListeners() {
         $('#validation-errors').hide();
         $('#error-list').empty();
         
+        // ป้องกันการส่งซ้ำ
+        if (isSubmitting) {
+            showAlert('warning', 'กำลังประมวลผล โปรดรอสักครู่...', 3000);
+            return;
+        }
+        
         // ตรวจสอบความถูกต้องของข้อมูลก่อนบันทึก
         if (validateForm()) {
+            isSubmitting = true;
+            $('#loading-overlay').css('display', 'flex');
             saveFormData();
+        }
+    });
+    
+    // Event listener สำหรับปุ่มบันทึกฉบับร่าง
+    $('#save-draft-btn').on('click', function() {
+        // ตรวจสอบข้อมูลขั้นต่ำ
+        const minValidation = validateMinimumRequirements();
+        if (minValidation) {
+            saveDraft();
+        } else {
+            showAlert('warning', 'กรุณากรอกข้อมูลพื้นฐานอย่างน้อย Doc PT, วันที่ผลิต และ Item Number', 5000);
         }
     });
     
@@ -559,6 +1121,309 @@ function addFormEventListeners() {
     
     // คำนวณผลรวมเริ่มต้น
     calculateDefectTotals();
+    
+    // เพิ่ม event listener สำหรับการติดตามการเปลี่ยนแปลงในฟอร์ม
+    $('input, select, textarea').on('change input', function() {
+        isFormDirty = true;
+    });
+    
+    // เพิ่ม tooltips สำหรับข้อมูลเพิ่มเติม
+    $('[data-bs-toggle="tooltip"]').tooltip();
+    
+    // แสดงเวลาที่บันทึกล่าสุด
+    if (lastSaveTime) {
+        $('#last-save-time').text(lastSaveTime.toLocaleString('th-TH'));
+        $('#last-save-info').show();
+    }
+}
+
+/**
+ * ตรวจสอบข้อมูลขั้นต่ำสำหรับการบันทึกฉบับร่าง
+ */
+function validateMinimumRequirements() {
+    const docPt = $('#doc-pt').val().trim();
+    const prodDate = $('#production-date').val();
+    const itemNumber = $('#item-number').val().trim();
+    
+    return docPt !== '' && prodDate !== '' && itemNumber !== '';
+}
+
+/**
+ * บันทึกฉบับร่าง
+ */
+function saveDraft() {
+    try {
+        // เตรียมข้อมูลสำหรับบันทึก
+        const formData = collectFormData();
+        formData.status = 'draft';
+        
+        $('#loading-overlay').css('display', 'flex');
+        
+        $.ajax({
+            url: 'api/api.php?action=save_inspection',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            timeout: 30000,
+            success: function(response) {
+                $('#loading-overlay').hide();
+                
+                try {
+                    const result = typeof response === 'object' ? response : JSON.parse(response);
+                    
+                    if (result.status === 'success') {
+                        // อัพเดท version
+                        formVersion = result.version || (formVersion + 1);
+                        $('#form-version').val(formVersion);
+                        
+                        showAlert('success', 'บันทึกฉบับร่างเรียบร้อยแล้ว รหัสการตรวจสอบ: ' + result.id, 5000);
+                        
+                        // ล้างข้อมูลใน localStorage
+                        clearSavedFormState();
+                        
+                        // รีเซ็ตสถานะของฟอร์ม
+                        isFormDirty = false;
+                        
+                        // อัพเดทเวลาบันทึกล่าสุด
+                        lastSaveTime = new Date();
+                        $('#last-save-time').text(lastSaveTime.toLocaleString('th-TH'));
+                        $('#last-save-info').show();
+                    } else {
+                        showAlert('danger', 'เกิดข้อผิดพลาด: ' + result.message, 5000);
+                    }
+                } catch (e) {
+                    console.error('Error parsing response:', e, response);
+                    showAlert('danger', 'เกิดข้อผิดพลาดในการประมวลผลการตอบกลับ', 5000);
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#loading-overlay').hide();
+                
+                if (status === 'timeout') {
+                    showAlert('danger', 'การเชื่อมต่อหมดเวลา กรุณาลองใหม่อีกครั้ง', 5000);
+                } else if (xhr.status === 409) {
+                    // ข้อผิดพลาดจาก Concurrency
+                    handleConcurrencyError();
+                } else {
+                    showAlert('danger', 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error, 5000);
+                }
+                
+                console.error('AJAX Error:', status, error, xhr.responseText);
+            },
+            complete: function() {
+                isSubmitting = false;
+            }
+        });
+    } catch (e) {
+        $('#loading-overlay').hide();
+        isSubmitting = false;
+        console.error('Error in saveDraft:', e);
+        showAlert('danger', 'เกิดข้อผิดพลาด: ' + e.message, 5000);
+    }
+}
+
+/**
+ * เก็บรวบรวมข้อมูลจากฟอร์ม
+ */
+function collectFormData() {
+    // เก็บข้อมูลพื้นฐาน
+    const formData = {
+        // เพิ่ม version สำหรับ optimistic locking
+        version: formVersion,
+        
+        // ข้อมูลทั่วไป
+        docPT: sanitizeInput($('#doc-pt').val()),
+        productionDate: $('#production-date').val(),
+        shift: $('input[name="shift"]:checked').val(),
+        itemNumber: sanitizeInput($('#item-number').val()),
+        gaugeMark: $('#gauge-mark').val(),
+        productionType: $('input[name="production-type"]:checked').val(),
+        useJig: $('#use-jig').is(':checked'),
+        noJig: $('#no-jig').is(':checked'),
+        machineNo: sanitizeInput($('#machine-no').val()),
+        totalProduct: $('#total-product').val(),
+        samplingDate: $('#sampling-date').val(),
+        workOrder: sanitizeInput($('#work-order').val()),
+        operation: sanitizeInput($('#operation').val()),
+        
+        // เพิ่ม CSRF token
+        csrfToken: $('#csrf-token').val(),
+        
+        // ข้อมูลล็อต (จะเก็บเป็นอาร์เรย์)
+        lots: [],
+        
+        // ข้อมูลข้อบกพร่อง (จะเก็บเป็นอาร์เรย์)
+        defects: [],
+        
+        // ข้อมูลการวัดความเครียด (จะเก็บเป็นอาร์เรย์)
+        strainMeasurements: [],
+        
+        // ข้อมูลการอนุมัติ
+        inspector: $('#inspector').val(),
+        supervisor: $('#supervisor').val(),
+        remarks: sanitizeInput($('#remarks').val())
+    };
+    
+    // เก็บข้อมูลล็อต
+    for (let i = 1; i <= 4; i++) {
+        const lotNumber = $(`#lot-number-${i}`).val();
+        if (lotNumber) {
+            formData.lots.push({
+                lotNumber: `lot${i}`,
+                piecesPerLot: $(`#pieces-per-lot-${i}`).val() || 0,
+                description: sanitizeInput($(`#description-${i}`).val()) || '',
+                palletNo: sanitizeInput($(`#pallet-no-${i}`).val()) || '',
+                strainStd: $(`#strain-std-${i}`).val() || null,
+                firstSampleSize: $(`#first-sample-size-${i}`).val() || null,
+                firstSampleAcRe: sanitizeInput($(`#first-sample-ac-re-${i}`).val()) || '',
+                secondSampleSize: $(`#second-sample-size-${i}`).val() || null,
+                secondSampleAcRe: sanitizeInput($(`#second-sample-ac-re-${i}`).val()) || '',
+                result: $(`input[name="result-${i}"]:checked`).val() || '',
+                qp: sanitizeInput($(`#qp-${i}`).val()) || '',
+                strainResult: $(`input[name="strain-result-${i}"]:checked`).val() || ''
+            });
+        }
+    }
+    
+    // เก็บข้อมูลข้อบกพร่องจาก activeDefects
+    if (activeDefects && activeDefects.length > 0) {
+        // วนลูปผ่านแต่ละข้อบกพร่องที่เลือก
+        activeDefects.forEach(defect => {
+            // วนลูปผ่านแต่ละล็อต (1-4)
+            for (let lot = 1; lot <= 4; lot++) {
+                // ดึงจำนวนข้อบกพร่องในล็อตนี้
+                const count = parseInt(defect.counts[lot]) || 0;
+                // บันทึกเฉพาะกรณีที่มีจำนวนมากกว่า 0
+                if (count > 0) {
+                    formData.defects.push({
+                        lot: lot,
+                        defectCode: defect.id,
+                        count: count
+                    });
+                }
+            }
+        });
+    }
+    
+    // เก็บข้อมูลการวัดความเครียด
+    $('.strain-input').each(function() {
+        const lot = $(this).data('lot');
+        const position = $(this).data('position');
+        const value = parseFloat($(this).val());
+        
+        if (value) {
+            formData.strainMeasurements.push({
+                lot: lot,
+                position: position,
+                value: value
+            });
+        }
+    });
+    
+    return formData;
+}
+
+/**
+ * ล้างข้อมูลและสถานะที่ป้อนไว้
+ */
+function sanitizeInput(input) {
+    if (typeof input !== 'string') return input;
+    
+    // ล้างอักขระพิเศษที่อาจใช้ในการโจมตี XSS
+    return input
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/\//g, '&#x2F;');
+}
+
+/**
+ * จัดการข้อผิดพลาดเรื่อง Concurrency
+ */
+function handleConcurrencyError() {
+    const message = `
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <strong><i class="fas fa-exclamation-triangle"></i> ข้อมูลถูกแก้ไขโดยผู้ใช้อื่น</strong>
+            <p>ข้อมูลนี้ถูกแก้ไขโดยผู้ใช้อื่นในระหว่างที่คุณกำลังแก้ไข คุณต้องการดำเนินการอย่างไร?</p>
+            <div class="mt-2">
+                <button class="btn btn-warning btn-sm refresh-data-btn">
+                    <i class="fas fa-sync"></i> รีเฟรชข้อมูล
+                </button>
+                <button class="btn btn-outline-secondary btn-sm ms-2 force-save-btn">
+                    <i class="fas fa-save"></i> บังคับบันทึกข้อมูลของฉัน
+                </button>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    `;
+    
+    // แสดงข้อความและเพิ่ม event listeners
+    const alertBox = $(message);
+    
+    alertBox.find('.refresh-data-btn').on('click', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const inspectionId = urlParams.get('id');
+        
+        if (inspectionId) {
+            loadExistingInspection(inspectionId);
+        } else {
+            location.reload();
+        }
+        
+        alertBox.alert('close');
+    });
+    
+    alertBox.find('.force-save-btn').on('click', function() {
+        const formData = collectFormData();
+        // เพิ่มเฉพาะตัวบอกว่าเป็นการบังคับบันทึก
+        formData.forceSave = true;
+        
+        $('#loading-overlay').css('display', 'flex');
+        isSubmitting = true;
+        
+        $.ajax({
+            url: 'api/api.php?action=save_inspection',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(formData),
+            timeout: 30000,
+            success: function(response) {
+                $('#loading-overlay').hide();
+                isSubmitting = false;
+                
+                try {
+                    const result = typeof response === 'object' ? response : JSON.parse(response);
+                    
+                    if (result.status === 'success') {
+                        // อัพเดท version
+                        formVersion = result.version || (formVersion + 1);
+                        $('#form-version').val(formVersion);
+                        
+                        showAlert('success', 'บันทึกข้อมูลเรียบร้อยแล้ว', 3000);
+                        showSuccessScreen(result.id);
+                    } else {
+                        showAlert('danger', 'เกิดข้อผิดพลาด: ' + result.message, 5000);
+                    }
+                } catch (e) {
+                    console.error('Error parsing response:', e, response);
+                    showAlert('danger', 'เกิดข้อผิดพลาดในการประมวลผลการตอบกลับ', 5000);
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#loading-overlay').hide();
+                isSubmitting = false;
+                
+                showAlert('danger', 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error, 5000);
+                console.error('AJAX Error:', status, error, xhr.responseText);
+            }
+        });
+        
+        alertBox.alert('close');
+    });
+    
+    $('#quality-form').prepend(alertBox);
 }
 
 // ฟังก์ชันตรวจสอบความถูกต้องของฟอร์ม
@@ -654,9 +1519,10 @@ function initDefectsSection() {
                     defectsHtml += `<div class="col-12 mb-2"><h6 class="mt-2">${category.name}</h6></div>`;
                     
                     categoryDefects.forEach(defect => {
+                        const severityClass = getSeverityClass(defect.severity);
                         defectsHtml += `
                             <div class="col-md-6 col-lg-4 mb-2">
-                                <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn" data-id="${defect.id}">
+                                <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn ${severityClass}" data-id="${defect.id}">
                                     <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
                                 </button>
                             </div>
@@ -667,9 +1533,10 @@ function initDefectsSection() {
         } else {
             // กรณีกรองตามหมวดหมู่
             filteredDefects.forEach(defect => {
+                const severityClass = getSeverityClass(defect.severity);
                 defectsHtml += `
                     <div class="col-md-6 col-lg-4 mb-2">
-                        <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn" data-id="${defect.id}">
+                        <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn ${severityClass}" data-id="${defect.id}">
                             <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
                         </button>
                     </div>
@@ -692,6 +1559,26 @@ function initDefectsSection() {
         });
     }
     
+    /**
+     * รับ CSS class ตามระดับความรุนแรงของข้อบกพร่อง
+     * @param {string} severity ระดับความรุนแรง
+     * @return {string} CSS class
+     */
+    function getSeverityClass(severity) {
+        switch (severity) {
+            case 'low':
+                return 'defect-low';
+            case 'medium':
+                return 'defect-medium';
+            case 'high':
+                return 'defect-high';
+            case 'critical':
+                return 'defect-critical';
+            default:
+                return '';
+        }
+    }
+    
     // แสดงข้อบกพร่องที่เลือกไว้
     function renderActiveDefects() {
         if (activeDefects.length === 0) {
@@ -700,447 +1587,27 @@ function initDefectsSection() {
             return;
         }
         
-        const activeDefectsHtml = activeDefects.map(defect => `
-            <tr>
-                <td>${defect.id}</td>
-                <td>${defect.name}</td>
-                <td>
-                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="1" value="${defect.counts[1] || 0}">
-                </td>
-                <td>
-                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="2" value="${defect.counts[2] || 0}">
-                </td>
-                <td>
-                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="3" value="${defect.counts[3] || 0}">
-                </td>
-                <td>
-                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                           data-defect="${defect.id}" data-lot="4" value="${defect.counts[4] || 0}">
-                </td>
-                <td>
-                    <button type="button" class="btn btn-sm btn-danger remove-defect-btn" data-id="${defect.id}">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-        
-        $('#active-defects').html(activeDefectsHtml);
-        
-        // เพิ่ม event listeners
-        $('.defect-count-input').on('change', function() {
-            const defectId = $(this).data('defect');
-            const lot = $(this).data('lot');
-            const value = parseInt($(this).val()) || 0;
-            updateDefectCount(defectId, lot, value);
-        });
-        
-        $('.remove-defect-btn').on('click', function(e) {
-            e.preventDefault(); // ป้องกันการเลื่อนหน้า
-            const defectId = $(this).data('id');
-            removeDefect(defectId);
-        });
-        
-        // อัพเดทผลรวม
-        calculateDefectTotals();
-    }
-    
-    // เพิ่มข้อบกพร่องในรายการที่เลือก
-    function addDefect(defectId) {
-        // ตรวจสอบว่ามีข้อบกพร่องนี้อยู่แล้วหรือไม่
-        if (!activeDefects.some(d => d.id === defectId)) {
-            const defect = defectTypes.find(d => d.id === defectId);
-            if (defect) {
-                // สร้างออบเจกต์ใหม่ที่มีค่าเริ่มต้นสำหรับแต่ละล็อต
-                const newDefect = {
-                    ...defect,
-                    counts: { 1: 0, 2: 0, 3: 0, 4: 0 }
-                };
-                
-                // กำหนดค่าเริ่มต้นเป็น 1 สำหรับล็อตที่เลือก
-                newDefect.counts[selectedLot] = 1;
-                
-                // เพิ่มเข้าในรายการ
-                activeDefects.push(newDefect);
-                
-                // แสดงผลอีกครั้ง
-                renderActiveDefects();
-                
-                // แสดงข้อความแจ้งเตือนสำเร็จ
-                showAlert('success', `เพิ่มข้อบกพร่อง "${defect.name}" ในล็อต ${selectedLot} เรียบร้อยแล้ว`);
-            }
-        } else {
-            // ถ้ามีแล้ว ให้เพิ่มจำนวนในล็อตที่เลือก
-            updateDefectCount(defectId, selectedLot, (activeDefects.find(d => d.id === defectId).counts[selectedLot] || 0) + 1);
-            showAlert('info', `เพิ่มจำนวนข้อบกพร่อง "${defectTypes.find(d => d.id === defectId).name}" ในล็อต ${selectedLot}`);
-        }
-    }
-    
-    // ลบข้อบกพร่องจากรายการที่เลือก
-    function removeDefect(defectId) {
-        const defectToRemove = activeDefects.find(d => d.id === defectId);
-        if (defectToRemove) {
-            activeDefects = activeDefects.filter(d => d.id !== defectId);
-            renderActiveDefects();
-            
-            // แสดงข้อความแจ้งเตือนลบสำเร็จ
-            showAlert('info', `ลบข้อบกพร่อง "${defectToRemove.name}" เรียบร้อยแล้ว`);
-        }
-    }
-    
-    // อัพเดทจำนวนข้อบกพร่อง
-    function updateDefectCount(defectId, lot, value) {
-        activeDefects = activeDefects.map(defect => {
-            if (defect.id === defectId) {
-                return {
-                    ...defect,
-                    counts: {
-                        ...defect.counts,
-                        [lot]: value
-                    }
-                };
-            }
-            return defect;
-        });
-        
-        // อัพเดทผลรวม
-        calculateDefectTotals();
-    }
-    
-    // แสดงข้อความแจ้งเตือน
-    function showAlert(type, message) {
-        // ซ่อนการแจ้งเตือนเดิม
-        $('#defect-alert').remove();
-        
-        // สร้างอิลิเมนต์ alert
-        const alertHtml = `
-            <div id="defect-alert" class="alert alert-${type} alert-dismissible fade show mt-2 mb-3" role="alert">
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        `;
-        
-        // เพิ่ม alert เข้าไปที่ส่วนบนของ defects section
-        $('#defects-section').prepend(alertHtml);
-        
-        // ลบ alert หลังจาก 3 วินาที
-        setTimeout(() => {
-            $('#defect-alert').fadeOut(function() {
-                $(this).remove();
-            });
-        }, 3000);
-    }
-    
-    // เพิ่ม event listeners
-    $('#defect-search').on('keyup', function() {
-        searchTerm = $(this).val().trim();
-        renderDefectList();
-    });
-    
-    $('#clear-defect-search').on('click', function(e) {
-        e.preventDefault(); // ป้องกันการเลื่อนหน้า
-        $('#defect-search').val('');
-        searchTerm = '';
-        renderDefectList();
-    });
-    
-    $('#defect-category').on('change', function() {
-        selectedCategory = parseInt($(this).val());
-        renderDefectList();
-    });
-    
-    $('#lot-selector').on('change', function() {
-        selectedLot = parseInt($(this).val());
-    });
-    
-    // เริ่มต้นแสดงรายการข้อบกพร่อง
-    renderDefectList();
-    renderActiveDefects();
-}
-
-// ฟังก์ชันคำนวณผลรวมข้อบกพร่อง
-function calculateDefectTotals() {
-    // คำนวณผลรวมสำหรับแต่ละล็อต
-    for (let lot = 1; lot <= 4; lot++) {
-        let total = 0;
-        
-        // ใช้ข้อมูลจาก activeDefects
-        activeDefects.forEach(defect => {
-            total += parseInt(defect.counts[lot]) || 0;
-        });
-        
-        $(`#total-defects-${lot}`).text(total);
-    }
-}
-
-// ฟังก์ชันล้างฟอร์ม
-function clearForm() {
-    if (confirm('คุณต้องการล้างข้อมูลทั้งหมดในฟอร์มนี้ใช่หรือไม่?')) {
-        $('#quality-form')[0].reset();
-        
-        // ล้างข้อมูลข้อบกพร่อง
-        activeDefects = [];
-        $('#active-defects').empty();
-        calculateDefectTotals();
-        
-        // ซ่อนข้อความแจ้งเตือน
-        $('#validation-errors').hide();
-        
-        // ตั้งค่าล็อตกลับเป็นค่าเริ่มต้น
-        $('#lot-selector').val(1);
-        selectedLot = 1;
-        
-        // รีเซ็ตการค้นหาข้อบกพร่อง
-        $('#defect-search').val('');
-        $('#defect-category').val(0);
-        
-        // รีโหลดรายการข้อบกพร่อง
-        initDefectsSection();
-        
-        // แสดงข้อความแจ้งเตือน
-        showAlert('info', 'ล้างข้อมูลแบบฟอร์มเรียบร้อยแล้ว');
-    }
-}
-
-// แสดงข้อความแจ้งเตือนทั่วไป
-function showAlert(type, message) {
-    // ซ่อนการแจ้งเตือนเดิม
-    $('#alert-message').remove();
-    
-    // สร้างอิลิเมนต์ alert
-    const alertHtml = `
-        <div id="alert-message" class="alert alert-${type} alert-dismissible fade show mt-3 mb-3" role="alert">
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    `;
-    
-    // เพิ่ม alert เข้าไปที่ส่วนบนของ form
-    $('#quality-form').prepend(alertHtml);
-    
-    // ลบ alert หลังจาก 3 วินาที
-    setTimeout(() => {
-        $('#alert-message').fadeOut(function() {
-            $(this).remove();
-        });
-    }, 3000);
-}
-
-// ฟังก์ชันบันทึกข้อมูลจากฟอร์ม
-function saveFormData() {
-    // แสดงข้อความกำลังบันทึกข้อมูล
-    const saveStatus = $('<div class="alert alert-info mt-3" id="save-status">กำลังบันทึกข้อมูล...</div>');
-    $('#save-status').remove(); // ลบข้อความเดิม (ถ้ามี)
-    $('#quality-form').append(saveStatus);
-    
-    // เก็บข้อมูลจากฟอร์ม
-    const formData = {
-        // ข้อมูลทั่วไป
-        docPT: $('#doc-pt').val(),
-        productionDate: $('#production-date').val(),
-        shift: $('input[name="shift"]:checked').val(),
-        itemNumber: $('#item-number').val(),
-        gaugeMark: $('#gauge-mark').val(),
-        productionType: $('input[name="production-type"]:checked').val(),
-        useJig: $('#use-jig').is(':checked'),
-        noJig: $('#no-jig').is(':checked'),
-        machineNo: $('#machine-no').val(),
-        totalProduct: $('#total-product').val(),
-        samplingDate: $('#sampling-date').val(),
-        workOrder: $('#work-order').val(),
-        operation: $('#operation').val(),
-        
-        // ข้อมูลล็อต (จะเก็บเป็นอาร์เรย์)
-        lots: [],
-        
-        // ข้อมูลข้อบกพร่อง (จะเก็บเป็นอาร์เรย์)
-        defects: [],
-        
-        // ข้อมูลการวัดความเครียด (จะเก็บเป็นอาร์เรย์)
-        strainMeasurements: [],
-        
-        // ข้อมูลการอนุมัติ
-        inspector: $('#inspector').val(),
-        supervisor: $('#supervisor').val(),
-        remarks: $('#remarks').val()
-    };
-    
-    // เก็บข้อมูลล็อต
-    for (let i = 1; i <= 4; i++) {
-        if ($(`#lot-number-${i}`).val()) {
-            const lotData = {
-                lotNumber: `lot${i}`,
-                piecesPerLot: $(`#pieces-per-lot-${i}`).val() || 0,
-                description: $(`#description-${i}`).val() || '',
-                palletNo: $(`#pallet-no-${i}`).val() || '',
-                strainStd: $(`#strain-std-${i}`).val() || null,
-                firstSampleSize: $(`#first-sample-size-${i}`).val() || null,
-                firstSampleAcRe: $(`#first-sample-ac-re-${i}`).val() || '',
-                secondSampleSize: $(`#second-sample-size-${i}`).val() || null,
-                secondSampleAcRe: $(`#second-sample-ac-re-${i}`).val() || '',
-                result: $(`input[name="result-${i}"]:checked`).val() || '',
-                qp: $(`#qp-${i}`).val() || '',
-                strainResult: $(`input[name="strain-result-${i}"]:checked`).val() || ''
-            };
-            
-            formData.lots.push(lotData);
-        }
-    }
-    
-    // เก็บข้อมูลข้อบกพร่องจาก activeDefects
-    if (activeDefects && activeDefects.length > 0) {
-        // วนลูปผ่านแต่ละข้อบกพร่องที่เลือก
-        activeDefects.forEach(defect => {
-            // วนลูปผ่านแต่ละล็อต (1-4)
-            for (let lot = 1; lot <= 4; lot++) {
-                // ดึงจำนวนข้อบกพร่องในล็อตนี้
-                const count = parseInt(defect.counts[lot]) || 0;
-                // บันทึกเฉพาะกรณีที่มีจำนวนมากกว่า 0
-                if (count > 0) {
-                    formData.defects.push({
-                        lot: lot,
-                        defectCode: defect.id,
-                        count: count
-                    });
-                }
-            }
-        });
-    }
-    
-    // เก็บข้อมูลการวัดความเครียด
-    $('.strain-input').each(function() {
-        const lot = $(this).data('lot');
-        const position = $(this).data('position');
-        const value = parseFloat($(this).val());
-        
-        if (value) {
-            formData.strainMeasurements.push({
-                lot: lot,
-                position: position,
-                value: value
-            });
-        }
-    });
-    
-    // Log ข้อมูลที่จะส่งไป
-    console.log("ข้อมูลที่จะส่งไปบันทึก:", JSON.stringify(formData));
-    
-    // ตรวจสอบว่ามีล็อตข้อมูลหรือไม่
-    if (formData.lots.length === 0) {
-        $('#save-status').removeClass('alert-info').addClass('alert-danger')
-            .html(`
-                <strong>เกิดข้อผิดพลาด!</strong><br>
-                กรุณาระบุข้อมูลล็อตอย่างน้อย 1 ล็อต<br>
-                <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
-                    <i class="fas fa-times"></i> ปิด
-                </button>
-            `);
-        return;
-    }
-    
-    // ส่งข้อมูลไปยัง API ด้วย AJAX
-    $.ajax({
-        url: 'api/api.php?action=save_inspection',
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify(formData),
-        timeout: 30000, // เพิ่มค่า timeout เป็น 30 วินาที
-        success: function(response) {
-            console.log("การตอบกลับจาก API:", response);
-            
-            try {
-                // ตรวจสอบว่า response เป็น object หรือ string
-                const result = typeof response === 'object' ? response : JSON.parse(response);
-                
-                if (result.status === 'success') {
-                    // แสดงข้อความสำเร็จ
-                    $('#save-status').removeClass('alert-info').addClass('alert-success')
-                        .html(`
-                            <strong>บันทึกข้อมูลเรียบร้อย!</strong><br>
-                            หมายเลขการตรวจสอบ: ${result.id}<br>
-                            <div class="mt-3">
-                                <a href="view.html?id=${result.id}" class="btn btn-primary">
-                                    <i class="fas fa-eye"></i> ดูข้อมูลที่บันทึก
-                                </a>
-                                <button class="btn btn-secondary ms-2" onclick="clearForm()">
-                                    <i class="fas fa-plus"></i> เริ่มบันทึกใหม่
-                                </button>
-                            </div>
-                        `);
-                    
-                    // เลื่อนไปยังข้อความสำเร็จ
-                    $('html, body').animate({
-                        scrollTop: $('#save-status').offset().top - 100
-                    }, 500);
-                } else {
-                    // แสดงข้อความผิดพลาด
-                    $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                        .html(`
-                            <strong>เกิดข้อผิดพลาด!</strong><br>
-                            ${result.message}<br>
-                            <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
-                                <i class="fas fa-times"></i> ปิด
-                            </button>
-                        `);
-                    
-                    console.error('Error response:', result);
-                }
-            } catch (e) {
-                // กรณีเกิดข้อผิดพลาดในการแปลง JSON
-                console.error('Error parsing response:', e);
-                console.log('Raw response:', response);
-                
-                $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                    .html(`
-                        <strong>เกิดข้อผิดพลาด!</strong><br>
-                        ไม่สามารถรับข้อมูลจากเซิร์ฟเวอร์ได้<br>
-                        <div class="mt-2">
-                            <p class="text-monospace small">ข้อความผิดพลาด: ${e.message}</p>
-                            <div class="alert alert-secondary p-2 small">
-                                <code>${response?.substr(0, 500) || 'ไม่มีข้อมูลตอบกลับ'}</code>
-                                ${response?.length > 500 ? '...' : ''}
-                            </div>
-                        </div>
-                        <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
-                            <i class="fas fa-times"></i> ปิด
-                        </button>
-                    `);
-            }
-        },
-        error: function(xhr, status, error) {
-            // กรณีเกิด error จาก AJAX
-            console.error('AJAX Error:', status, error);
-            console.log('XHR Response:', xhr.responseText);
-            
-            if (status === 'timeout') {
-                $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                    .html(`
-                        <strong>เกิดข้อผิดพลาด!</strong><br>
-                        การเชื่อมต่อหมดเวลา กรุณาลองอีกครั้ง<br>
-                        <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
-                            <i class="fas fa-times"></i> ปิด
-                        </button>
-                    `);
-            } else {
-                $('#save-status').removeClass('alert-info').addClass('alert-danger')
-                    .html(`
-                        <strong>เกิดข้อผิดพลาด!</strong><br>
-                        ${error || 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์'}<br>
-                        <div class="mt-2">
-                            <p class="text-monospace small">สถานะ: ${status}</p>
-                            <div class="alert alert-secondary p-2 small">
-                                <code>${xhr.responseText?.substr(0, 500) || 'ไม่มีข้อมูลตอบกลับ'}</code>
-                                ${xhr.responseText?.length > 500 ? '...' : ''}
-                            </div>
-                        </div>
-                        <button class="btn btn-outline-danger mt-2" onclick="$('#save-status').remove()">
-                            <i class="fas fa-times"></i> ปิด
-                        </button>
-                    `);
-            }
-        }
-    });
-}
+        const activeDefectsHtml = activeDefects.map(defect => {
+            const severityClass = getSeverityClass(defect.severity);
+            return `
+                <tr class="${severityClass}">
+                    <td>${defect.id}</td>
+                    <td>${defect.name}</td>
+                    <td>
+                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                               data-defect="${defect.id}" data-lot="1" value="${defect.counts[1] || 0}">
+                    </td>
+                    <td>
+                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                               data-defect="${defect.id}" data-lot="2" value="${defect.counts[2] || 0}">
+                    </td>
+                    <td>
+                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                               data-defect="${defect.id}" data-lot="3" value="${defect.counts[3] || 0}">
+                    </td>
+                    <td>
+                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                               data-defect="${defect.id}" data-lot="4" value="${defect.counts[4] || 0}">
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn

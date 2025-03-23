@@ -107,6 +107,7 @@ class Auth {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
             
             // สร้าง token สำหรับ API
             $token = self::generateToken($user['id']);
@@ -126,7 +127,8 @@ class Auth {
                     'email' => $user['email'],
                     'role' => $user['role']
                 ],
-                'token' => $token
+                'token' => $token,
+                'csrf_token' => $_SESSION['csrf_token']
             ];
         } catch (Exception $e) {
             throw $e;
@@ -188,18 +190,18 @@ class Auth {
         try {
             $db = getPDO();
             
-            // ค้นหา token ในฐานข้อมูล
+            // ค้นหา token ในฐานข้อมูล และตรวจสอบว่าผู้ใช้ยังคงใช้งานอยู่
             $stmt = $db->prepare("
-                SELECT t.*, u.username, u.display_name, u.role 
+                SELECT t.*, u.username, u.display_name, u.role, u.is_active 
                 FROM auth_tokens t
                 JOIN users u ON t.user_id = u.id
-                WHERE t.token = ? AND t.expires_at > NOW() AND u.is_active = 1
+                WHERE t.token = ? AND t.expires_at > NOW()
             ");
             $stmt->execute([$token]);
             $tokenData = $stmt->fetch();
             
-            // ถ้าไม่พบ token หรือหมดอายุแล้ว
-            if (!$tokenData) {
+            // ถ้าไม่พบ token หรือหมดอายุแล้ว หรือผู้ใช้ไม่ active
+            if (!$tokenData || $tokenData['is_active'] != 1) {
                 return false;
             }
             
@@ -207,6 +209,11 @@ class Auth {
             $_SESSION['user_id'] = $tokenData['user_id'];
             $_SESSION['username'] = $tokenData['username'];
             $_SESSION['role'] = $tokenData['role'];
+            
+            // สร้าง CSRF token ถ้ายังไม่มี
+            if (!isset($_SESSION['csrf_token'])) {
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+            }
             
             return true;
         } catch (Exception $e) {
@@ -222,6 +229,21 @@ class Auth {
             $db = getPDO();
             $stmt = $db->prepare("DELETE FROM auth_tokens WHERE token = ?");
             $stmt->execute([$token]);
+            
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+    
+    /**
+     * ลบ tokens ที่หมดอายุ
+     */
+    public static function cleanExpiredTokens() {
+        try {
+            $db = getPDO();
+            $stmt = $db->prepare("DELETE FROM auth_tokens WHERE expires_at < NOW()");
+            $stmt->execute();
             
             return true;
         } catch (Exception $e) {
@@ -320,6 +342,54 @@ class Auth {
      */
     public static function hashPassword($password) {
         return password_hash($password, PASSWORD_BCRYPT, ['cost' => HASH_COST]);
+    }
+    
+    /**
+     * สร้าง CSRF token
+     */
+    public static function generateCsrfToken() {
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
+    }
+    
+    /**
+     * ตรวจสอบ CSRF token
+     */
+    public static function validateCsrfToken($token) {
+        if (empty($_SESSION['csrf_token']) || empty($token)) {
+            return false;
+        }
+        
+        return hash_equals($_SESSION['csrf_token'], $token);
+    }
+    
+    /**
+     * ตรวจสอบความแข็งแรงของรหัสผ่าน
+     */
+    public static function isStrongPassword($password) {
+        // ความยาวอย่างน้อย 8 ตัวอักษร
+        if (strlen($password) < 8) {
+            return false;
+        }
+        
+        // ต้องมีตัวอักษรพิมพ์เล็กอย่างน้อย 1 ตัว
+        if (!preg_match('/[a-z]/', $password)) {
+            return false;
+        }
+        
+        // ต้องมีตัวอักษรพิมพ์ใหญ่อย่างน้อย 1 ตัว
+        if (!preg_match('/[A-Z]/', $password)) {
+            return false;
+        }
+        
+        // ต้องมีตัวเลขอย่างน้อย 1 ตัว
+        if (!preg_match('/[0-9]/', $password)) {
+            return false;
+        }
+        
+        return true;
     }
 }
 ?>
