@@ -1,0 +1,53 @@
+# ตั้งค่า rewrite engine
+RewriteEngine On
+
+# ตั้งค่า base path ถ้าไม่ได้อยู่ใน root directory
+# RewriteBase /api/
+
+# ป้องกันการเข้าถึงไฟล์ .env หรือไฟล์ config โดยตรง
+<FilesMatch "^\.env|config\.php|.*\.log$">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# ป้องกันการเข้าถึงไดเรกทอรี
+Options -Indexes
+
+# ป้องกันไฟล์ที่เริ่มต้นด้วยจุด (ไฟล์ซ่อน)
+<FilesMatch "^\.">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# ป้องกันการเข้าถึงโฟลเดอร์ logs
+<IfModule mod_rewrite.c>
+  RewriteRule ^logs/.* - [F,L]
+</IfModule>
+
+# ส่งทุก request ไปที่ index.php ถ้าไม่ใช่ไฟล์หรือไดเรกทอรีที่มีอยู่จริง
+<IfModule mod_rewrite.c>
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# ตั้งค่า CORS headers
+<IfModule mod_headers.c>
+  Header set Access-Control-Allow-Origin "*"
+  Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+  Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+  
+  # Pre-flight cache จะหมดอายุหลัง 24 ชั่วโมง
+  Header set Access-Control-Max-Age "86400"
+</IfModule>
+
+# ตั้งค่า PHP
+<IfModule mod_php7.c>
+  php_flag display_errors Off
+  php_flag log_errors On
+  php_value error_log logs/php_errors.log
+  php_value max_execution_time 300
+  php_value memory_limit 256M
+  php_value post_max_size 100M
+  php_value upload_max_filesize 50M
+</IfModule>
