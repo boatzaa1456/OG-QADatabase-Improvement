@@ -24,21 +24,19 @@ Options -Indexes
   RewriteRule ^logs/.* - [F,L]
 </IfModule>
 
-# ส่งทุก request ไปที่ index.php ถ้าไม่ใช่ไฟล์หรือไดเรกทอรีที่มีอยู่จริง
-<IfModule mod_rewrite.c>
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^(.*)$ index.php [QSA,L]
-</IfModule>
-
 # ตั้งค่า CORS headers
 <IfModule mod_headers.c>
   Header set Access-Control-Allow-Origin "*"
-  Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
-  Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
-  
-  # Pre-flight cache จะหมดอายุหลัง 24 ชั่วโมง
-  Header set Access-Control-Max-Age "86400"
+  Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+  Header set Access-Control-Allow-Headers "Content-Type, X-Requested-With"
+</IfModule>
+
+# ส่งทุก request ไปที่ index.php หรือ api.php
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.*)$ api.php [QSA,L]
 </IfModule>
 
 # ตั้งค่า PHP
