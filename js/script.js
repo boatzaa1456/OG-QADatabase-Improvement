@@ -1477,39 +1477,68 @@ function validateForm() {
     return true;
 }
 
-// ฟังก์ชันเตรียมข้อมูลในส่วนข้อบกพร่อง (ปรับปรุงแล้ว)
+/**
+ * เตรียมข้อมูลในส่วนข้อบกพร่อง
+ */
 function initDefectsSection() {
     // ตั้งค่าตัวแปรเริ่มต้น
-    let selectedCategory = 0;
     let searchTerm = '';
+    let selectedCategory = 0;
     selectedLot = 1; // ค่าเริ่มต้นเป็นล็อต 1
     
-    // ฟังก์ชันช่วยกรองข้อบกพร่อง
-    function getFilteredDefects() {
-        let filtered = defectTypes;
+    // แสดงรายการข้อบกพร่องเริ่มต้น
+    renderDefectList();
+    
+    // แสดงข้อบกพร่องที่เลือกไว้เริ่มต้น
+    renderActiveDefects();
+    
+    // เพิ่ม event listener สำหรับตัวกรองประเภทข้อบกพร่อง
+    $('#defect-category').on('change', function() {
+        selectedCategory = parseInt($(this).val());
+        renderDefectList();
+    });
+    
+    // เพิ่ม event listener สำหรับการค้นหาข้อบกพร่อง
+    $('#defect-search').on('input', function() {
+        searchTerm = $(this).val().trim();
+        renderDefectList();
+    });
+    
+    // เพิ่ม event listener สำหรับปุ่มล้างการค้นหา
+    $('#clear-defect-search').on('click', function() {
+        $('#defect-search').val('');
+        searchTerm = '';
+        renderDefectList();
+    });
+    
+    // เพิ่ม event listener สำหรับตัวเลือกล็อต
+    $('#lot-selector').on('change', function() {
+        selectedLot = parseInt($(this).val());
+    });
+    
+    /**
+     * แสดงรายการข้อบกพร่องตามเงื่อนไขการกรองปัจจุบัน
+     */
+    function renderDefectList() {
+        // กรองข้อบกพร่องตามเงื่อนไข
+        let filteredDefects = defectTypes;
         
         if (selectedCategory > 0) {
-            filtered = filtered.filter(defect => defect.categoryId === selectedCategory);
+            filteredDefects = filteredDefects.filter(defect => defect.categoryId === selectedCategory);
         }
         
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(
+            filteredDefects = filteredDefects.filter(
                 defect => defect.id.toLowerCase().includes(term) || 
                           defect.name.toLowerCase().includes(term)
             );
         }
         
-        return filtered;
-    }
-    
-    // แสดงรายการข้อบกพร่อง (ปรับปรุงแล้ว)
-    function renderDefectList() {
-        const filteredDefects = getFilteredDefects();
-        
+        // สร้าง HTML สำหรับรายการข้อบกพร่อง
         let defectsHtml = '';
         
-        // แบ่งกลุ่มตามหมวดหมู่เพื่อการแสดงผลที่ดีขึ้น
+        // แบ่งกลุ่มตามหมวดหมู่ถ้าแสดงทั้งหมด
         if (selectedCategory === 0) {
             // กรณีแสดงทั้งหมด แยกตามหมวดหมู่
             defectCategories.forEach(category => {
@@ -1552,138 +1581,49 @@ function initDefectsSection() {
         $('#defect-list').html(defectsHtml);
         
         // เพิ่ม event listeners สำหรับปุ่มเพิ่มข้อบกพร่อง
-        $('.add-defect-btn').on('click', function(e) {
-            e.preventDefault(); // ป้องกันการเลื่อนหน้า
+        $('.add-defect-btn').on('click', function() {
             const defectId = $(this).data('id');
             addDefect(defectId);
         });
     }
-    
-    /**
-     * รับ CSS class ตามระดับความรุนแรงของข้อบกพร่อง
-     * @param {string} severity ระดับความรุนแรง
-     * @return {string} CSS class
-     */
-    function getSeverityClass(severity) {
-        switch (severity) {
-            case 'low':
-                return 'defect-low';
-            case 'medium':
-                return 'defect-medium';
-            case 'high':
-                return 'defect-high';
-            case 'critical':
-                return 'defect-critical';
-            default:
-                return '';
-        }
-    }
-    
-    // แสดงข้อบกพร่องที่เลือกไว้
-    function renderActiveDefects() {
-        if (activeDefects.length === 0) {
-            $('#active-defects').html('<tr><td colspan="7" class="text-center text-muted py-3">ยังไม่มีข้อบกพร่องที่เลือก กรุณาเลือกข้อบกพร่องจากรายการด้านบน</td></tr>');
-            calculateDefectTotals();
-            return;
-        }
-        
-        const activeDefectsHtml = activeDefects.map(defect => {
-            const severityClass = getSeverityClass(defect.severity);
-            return `
-                <tr class="${severityClass}">
-                    <td>${defect.id}</td>
-                    <td>${defect.name}</td>
-                    <td>
-                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                               data-defect="${defect.id}" data-lot="1" value="${defect.counts[1] || 0}">
-                    </td>
-                    <td>
-                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                               data-defect="${defect.id}" data-lot="2" value="${defect.counts[2] || 0}">
-                    </td>
-                    <td>
-                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                               data-defect="${defect.id}" data-lot="3" value="${defect.counts[3] || 0}">
-                    </td>
-                    <td>
-                        <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
-                               data-defect="${defect.id}" data-lot="4" value="${defect.counts[4] || 0}">
-                    </td>
-                    <td>
-                        <button type="button" class="btn btn-sm btn-danger remove-defect-btn" data-defect="${defect.id}">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        });
-        
-        $('#active-defects').html(activeDefectsHtml);
-        
-        // Add event listeners for defect count inputs
-        $('.defect-count-input').on('change', function() {
-            const defectId = $(this).data('defect');
-            const lot = $(this).data('lot');
-            const count = parseInt($(this).val()) || 0;
-            
-            // Update activeDefects with new count
-            const defect = activeDefects.find(d => d.id === defectId);
-            if (defect) {
-                defect.counts[lot] = count;
-                isFormDirty = true;
-            }
-            
-            // Recalculate totals
-            calculateDefectTotals();
-        });
-        
-        // Add event listeners for remove buttons
-        $('.remove-defect-btn').on('click', function() {
-            const defectId = $(this).data('defect');
-            removeDefect(defectId);
-        });
-        
-        // Calculate totals after rendering
-        calculateDefectTotals();
-    }
 }
 
 /**
- * Add a defect to the active defects list
- * @param {string} defectId ID of the defect to add
+ * เพิ่มข้อบกพร่องในรายการที่เลือก
+ * @param {string} defectId รหัสของข้อบกพร่องที่จะเพิ่ม
  */
 function addDefect(defectId) {
-    // Check if defect already exists
+    // ตรวจสอบว่ามีข้อบกพร่องนี้อยู่แล้วหรือไม่
     if (activeDefects.some(d => d.id === defectId)) {
         showAlert('info', 'ข้อบกพร่องนี้ถูกเพิ่มไว้แล้ว', 2000);
         return;
     }
     
-    // Find defect in the list of all defects
+    // ค้นหาข้อบกพร่องในรายการทั้งหมด
     const defect = defectTypes.find(d => d.id === defectId);
     if (!defect) return;
     
-    // Add to active defects with zero counts for each lot
+    // เพิ่มไปยังข้อบกพร่องที่เลือกโดยเริ่มต้นด้วยค่าศูนย์สำหรับแต่ละล็อต
     const newDefect = {
         ...defect,
         counts: { 1: 0, 2: 0, 3: 0, 4: 0 }
     };
     
-    // Set selected lot count to 1 by default
+    // ตั้งค่าจำนวนข้อบกพร่องในล็อตที่เลือกเป็น 1 ตามค่าเริ่มต้น
     newDefect.counts[selectedLot] = 1;
     
     activeDefects.push(newDefect);
     isFormDirty = true;
     
-    // Re-render the defects table
+    // แสดงข้อบกพร่องใหม่ในตาราง
     renderActiveDefects();
     
     showAlert('success', `เพิ่มข้อบกพร่อง ${defect.name} แล้ว`, 2000, true);
 }
 
 /**
- * Remove a defect from the active defects list
- * @param {string} defectId ID of the defect to remove
+ * ลบข้อบกพร่องออกจากรายการที่เลือก
+ * @param {string} defectId รหัสของข้อบกพร่องที่จะลบ
  */
 function removeDefect(defectId) {
     const index = activeDefects.findIndex(d => d.id === defectId);
@@ -1697,20 +1637,110 @@ function removeDefect(defectId) {
 }
 
 /**
- * Calculate totals for defects in each lot
+ * รับ CSS class ตามระดับความรุนแรงของข้อบกพร่อง
+ * @param {string} severity ระดับความรุนแรง
+ * @return {string} CSS class
+ */
+function getSeverityClass(severity) {
+    switch (severity) {
+        case 'low':
+            return 'defect-low';
+        case 'medium':
+            return 'defect-medium';
+        case 'high':
+            return 'defect-high';
+        case 'critical':
+            return 'defect-critical';
+        default:
+            return '';
+    }
+}
+
+/**
+ * แสดงข้อบกพร่องที่เลือกไว้
+ */
+function renderActiveDefects() {
+    if (activeDefects.length === 0) {
+        $('#active-defects').html('<tr><td colspan="7" class="text-center text-muted py-3">ยังไม่มีข้อบกพร่องที่เลือก กรุณาเลือกข้อบกพร่องจากรายการด้านบน</td></tr>');
+        calculateDefectTotals();
+        return;
+    }
+    
+    const activeDefectsHtml = activeDefects.map(defect => {
+        const severityClass = getSeverityClass(defect.severity);
+        return `
+            <tr class="${severityClass}">
+                <td>${defect.id}</td>
+                <td>${defect.name}</td>
+                <td>
+                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                           data-defect="${defect.id}" data-lot="1" value="${defect.counts[1] || 0}">
+                </td>
+                <td>
+                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                           data-defect="${defect.id}" data-lot="2" value="${defect.counts[2] || 0}">
+                </td>
+                <td>
+                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                           data-defect="${defect.id}" data-lot="3" value="${defect.counts[3] || 0}">
+                </td>
+                <td>
+                    <input type="number" min="0" class="form-control form-control-sm defect-count-input" 
+                           data-defect="${defect.id}" data-lot="4" value="${defect.counts[4] || 0}">
+                </td>
+                <td>
+                    <button type="button" class="btn btn-sm btn-danger remove-defect-btn" data-defect="${defect.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+    
+    $('#active-defects').html(activeDefectsHtml);
+    
+    // เพิ่ม event listeners สำหรับ inputs จำนวนข้อบกพร่อง
+    $('.defect-count-input').on('change', function() {
+        const defectId = $(this).data('defect');
+        const lot = $(this).data('lot');
+        const count = parseInt($(this).val()) || 0;
+        
+        // อัพเดท activeDefects ด้วยจำนวนใหม่
+        const defect = activeDefects.find(d => d.id === defectId);
+        if (defect) {
+            defect.counts[lot] = count;
+            isFormDirty = true;
+        }
+        
+        // คำนวณผลรวมใหม่
+        calculateDefectTotals();
+    });
+    
+    // เพิ่ม event listeners สำหรับปุ่มลบ
+    $('.remove-defect-btn').on('click', function() {
+        const defectId = $(this).data('defect');
+        removeDefect(defectId);
+    });
+    
+    // คำนวณผลรวมหลังการแสดงผล
+    calculateDefectTotals();
+}
+
+/**
+ * คำนวณผลรวมสำหรับข้อบกพร่องในแต่ละล็อต
  */
 function calculateDefectTotals() {
-    // Initialize totals
+    // กำหนดค่าเริ่มต้นของผลรวม
     const totals = { 1: 0, 2: 0, 3: 0, 4: 0 };
     
-    // Calculate sum for each lot
+    // คำนวณผลรวมสำหรับแต่ละล็อต
     activeDefects.forEach(defect => {
         for (let lot = 1; lot <= 4; lot++) {
             totals[lot] += parseInt(defect.counts[lot] || 0);
         }
     });
     
-    // Update total display
+    // อัพเดทการแสดงผลรวม
     for (let lot = 1; lot <= 4; lot++) {
         $(`#total-defects-${lot}`).text(totals[lot]);
     }
@@ -1879,144 +1909,6 @@ function showAlert(type, message, duration = 5000, isAutoSave = false) {
         setTimeout(function() {
             $(`#${alertId}`).alert('close');
         }, duration);
-    }
-}
-
-/**
- * Initialize the defects section
- */
-function initDefectsSection() {
-    // Render initial defect list
-    renderDefectList();
-    
-    // Add event listener for defect category filter
-    $('#defect-category').on('change', function() {
-        selectedCategory = parseInt($(this).val());
-        renderDefectList();
-    });
-    
-    // Add event listener for defect search
-    $('#defect-search').on('input', function() {
-        searchTerm = $(this).val().trim();
-        renderDefectList();
-    });
-    
-    // Add event listener for clear search button
-    $('#clear-defect-search').on('click', function() {
-        $('#defect-search').val('');
-        searchTerm = '';
-        renderDefectList();
-    });
-    
-    // Add event listener for lot selector
-    $('#lot-selector').on('change', function() {
-        selectedLot = parseInt($(this).val());
-    });
-    
-    // Initialize search term and category variables
-    let searchTerm = '';
-    let selectedCategory = 0;
-    
-    /**
-     * Render the list of defects based on current filters
-     */
-    function renderDefectList() {
-        // Filter defects based on search term and category
-        let filteredDefects = defectTypes;
-        
-        if (selectedCategory > 0) {
-            filteredDefects = filteredDefects.filter(d => d.categoryId === selectedCategory);
-        }
-        
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filteredDefects = filteredDefects.filter(d => 
-                d.id.toLowerCase().includes(term) || 
-                d.name.toLowerCase().includes(term)
-            );
-        }
-        
-        // Generate HTML for defect list
-        let defectsHtml = '';
-        
-        // Group by category if showing all categories
-        if (selectedCategory === 0) {
-            const defectsByCategory = {};
-            
-            // Group defects by category
-            filteredDefects.forEach(defect => {
-                if (!defectsByCategory[defect.categoryId]) {
-                    defectsByCategory[defect.categoryId] = [];
-                }
-                defectsByCategory[defect.categoryId].push(defect);
-            });
-            
-            // Generate HTML for each category
-            defectCategories.forEach(category => {
-                const categoryDefects = defectsByCategory[category.id] || [];
-                
-                if (categoryDefects.length > 0) {
-                    defectsHtml += `<div class="col-12 mb-2"><h6 class="mt-2">${category.name}</h6></div>`;
-                    
-                    categoryDefects.forEach(defect => {
-                        const severityClass = getSeverityClass(defect.severity);
-                        defectsHtml += `
-                            <div class="col-md-6 col-lg-4 mb-2">
-                                <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn ${severityClass}" data-id="${defect.id}">
-                                    <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
-                                </button>
-                            </div>
-                        `;
-                    });
-                }
-            });
-        } else {
-            // Just list defects without categories
-            filteredDefects.forEach(defect => {
-                const severityClass = getSeverityClass(defect.severity);
-                defectsHtml += `
-                    <div class="col-md-6 col-lg-4 mb-2">
-                        <button type="button" class="btn btn-outline-primary w-100 text-start add-defect-btn ${severityClass}" data-id="${defect.id}">
-                            <span class="badge bg-secondary">${defect.id}</span> ${defect.name}
-                        </button>
-                    </div>
-                `;
-            });
-        }
-        
-        // Show message if no defects found
-        if (filteredDefects.length === 0) {
-            defectsHtml = '<div class="col-12 text-center py-3"><em>ไม่พบข้อบกพร่องที่ตรงกับเงื่อนไข</em></div>';
-        }
-        
-        // Update defect list
-        $('#defect-list').html(defectsHtml);
-        
-        // Add event listeners for add defect buttons
-        $('.add-defect-btn').on('click', function() {
-            const defectId = $(this).data('id');
-            addDefect(defectId);
-        });
-    }
-    
-    /**
-     * Get CSS class for defect severity
-     * @param {string} severity Severity level
-     * @return {string} CSS class
-     */
-    function getSeverityClass(severity) {
-        switch (severity) {
-            case 'low':
-                return 'defect-low';
-            case 'medium':
-                return 'defect-medium';
-            case 'high':
-                return 'defect-high';
-            case 'critical':
-                return 'defect-critical';
-            default:
-                return '';
-        }
     }
 }
 
